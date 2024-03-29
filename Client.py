@@ -54,8 +54,9 @@ def looking_for_a_server():
         print("wtf this is not an offer message!")
         return -4
 
+    server_ip = addr[0]
     print(f"Received offer from server '{server_name}'at address {addr[0]}, attempting to connect...")
-    return server_name, server_port
+    return server_name, server_ip, server_port
 
 
 def connect_to_server(server_ip, server_port):
@@ -84,5 +85,5 @@ if __name__ == "__main__":
         if type(result_from_looking) == int:
             time.sleep(1)
             continue
-        server_name, server_port = result_from_looking
-        time.sleep(1)
+        server_name, server_ip, server_port = result_from_looking
+        server_tcp_socket = connect_to_server(server_ip, server_port)

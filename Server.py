@@ -66,9 +66,12 @@ def udp_broadcast(server_name, server_port, stop_event):
         time.sleep(2)  # sleep to avoid busy waiting
 
 
-def save_client_socket(client_socket):
-    active_connections.append(client_socket)
-
+def save_client_info(client_socket):
+    # Receive data from the client
+    received_data = client_socket.recv(1024) # Adjust buffer size as needed
+    client_name = received_data.decode().strip()
+    active_connections.append(client_socket) # Might need a lock here in the future
+    print(f"Welcome {client_name}")
 
 def watch_for_inactivity(stop_event):
     global last_connection_time
@@ -98,12 +101,12 @@ def tcp_listener(server_port, stop_event):
             with time_lock:
                 global last_connection_time
                 last_connection_time = time.time()
-            threading.Thread(target=save_client_socket, args=(client_socket,)).start()
+            threading.Thread(target=save_client_info, args=(client_socket,)).start()
         except socket.timeout:
             continue  # just loop back to check the stop event which will probably be set on.
 
         # Handle the connection in a new thread
-        threading.Thread(target=save_client_socket, args=(client_socket,)).start()
+        threading.Thread(target=save_client_info, args=(client_socket,)).start()
 
 
 if __name__ == "__main__":
