@@ -7,6 +7,7 @@ import select
 import Server
 import struct
 
+
 def unpack_packet(data):
     # Define the format string for unpacking the packet
     # '>'  stands for big-endian, meaning the first decoded part of the packet will be stored in the first variable basically meaning that encoding happens from left to right
@@ -23,51 +24,65 @@ def unpack_packet(data):
     # Decode the server name to a string, stripping null bytes
     server_name = server_name_raw.decode().strip('\x00 ')
 
-
     return magic_cookie, message_type, server_name, server_port
 
 
 # UDP Listener for server broadcast
-def listen_for_offers():
+def looking_for_a_server():
     print("Client started, listening for offer requests...")
     udp_socket = sock.socket(sock.AF_INET, sock.SOCK_DGRAM)
-    udp_socket.setsockopt(sock.SOL_SOCKET, sock.SO_REUSEADDR,1)
-    while True:
-        try:
-            udp_socket.bind(('', 13117))
-            break
-        except OSError as e:
-            if e.errno == errno.EADDRINUSE:
-                print("This port is already in use by a different process! trying to bind again...")
-                time.sleep(2)
-                continue
-            else:
-                print("An unrecognized error has occurred during binding, trying to bind again...")
+    udp_socket.setsockopt(sock.SOL_SOCKET, sock.SO_REUSEADDR, 1)
+    try:
+        udp_socket.bind(('', 13117))
+    except OSError as e:
+        if e.errno == errno.EADDRINUSE:
+            print("This port is already in use by a different process! trying to bind again...")
+            return -1
+        else:
+            print("An unrecognized error has occurred during binding, trying to bind again...")
+            return -2
 
-    while True:
-        data, addr = udp_socket.recvfrom(1024)    # Blocking method! it won't reach the next line until it detects a broadcast
-        magic_cookie, message_type, server_name, server_port = unpack_packet(data)
-        if magic_cookie != 0xabcddcba:
-            print("No Magic cookie detected, my name is gil michalovich you killed my father and I reject this cookie!")
-            continue
-        if message_type != 0x2:
-            print("wtf this is not an offer message!")
-            continue
-        print(f"Received offer from server '{server_name}'at address {addr[0]}, attempting to connect...")
-        time.sleep(1)
-# TCP Connection to server
-# def connect_to_server(server_ip, server_port):
-#     tcp_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
-#     tcp_socket.connect((server_ip, server_port))
-#     tcp_socket.sendall(b'Client name\n')
-#     while True:
-#         ready_sockets, _, _ = select.select([tcp_socket], [], [], 0.1)
-#         for socket in ready_sockets:
-#             message = socket.recv(1024).decode()
-#             print(message)
-#             # Handle message
+    # Blocking method! it won't reach the next line until it detects a broadcast
+    data, addr = udp_socket.recvfrom(1024)
+    magic_cookie, message_type, server_name, server_port = unpack_packet(data)
+
+    if magic_cookie != 0xabcddcba:
+        print("No Magic cookie, nice try hacker!")
+        return -3
+
+    if message_type != 0x2:
+        print("wtf this is not an offer message!")
+        return -4
+
+    print(f"Received offer from server '{server_name}'at address {addr[0]}, attempting to connect...")
+    return server_name, server_port
+
+
+def connect_to_server(server_ip, server_port):
+    # Create a TCP/IP socket
+    tcp_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
+
+    try:
+        # Connect the socket to the server's address and port
+        tcp_socket.connect((server_ip, server_port))
+        print(f"Successfully connected to the server at {server_ip}:{server_port}")
+
+        # Immediately sends the player name before the game started.
+        message = "Gil\n"
+        tcp_socket.sendall(message.encode())
+        return tcp_socket
+    except sock.error as e:
+        print(f"Failed to connect to the server at {server_ip}:{server_port}: {e}")
+        return None
 
 
 # Main client function
 if __name__ == "__main__":
-    listen_for_offers()
+    while True:
+        result_from_looking = looking_for_a_server()
+        # Error Handling
+        if type(result_from_looking) == int:
+            time.sleep(1)
+            continue
+        server_name, server_port = result_from_looking
+        time.sleep(1)
