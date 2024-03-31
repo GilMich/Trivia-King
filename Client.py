@@ -85,5 +85,9 @@ if __name__ == "__main__":
         if type(result_from_looking) == int:
             time.sleep(1)
             continue
-        server_name, server_ip, server_port = result_from_looking
-        server_tcp_socket = connect_to_server(server_ip, server_port)
+        elif type(result_from_looking) == tuple:
+            break
+    server_name, server_ip, server_port = result_from_looking
+    server_tcp_socket = connect_to_server(server_ip, server_port)
+    while True:
+        time.sleep(1)

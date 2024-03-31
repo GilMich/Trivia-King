@@ -6,7 +6,7 @@ import netifaces
 from random import choice
 from concurrent.futures import ThreadPoolExecutor
 
-active_connections = []
+active_clients = {}
 last_connection_time = time.time()
 time_lock = threading.Lock()
 
@@ -56,22 +56,24 @@ def udp_broadcast(server_name, server_port, stop_event):
     message_type = 0x2  # Offer message
     server_name_padded = server_name.ljust(32)  # Ensure the server name is 32 characters long
     message = magic_cookie.to_bytes(4, 'big') + message_type.to_bytes(1,
-                                                                      'big') + server_name_padded.encode() + server_port.to_bytes(2, 'big')
+                                                                      'big') + server_name_padded.encode() + server_port.to_bytes(
+        2, 'big')
 
     # Broadcast
     while not stop_event.is_set():
         ip = get_local_ip()
         udp_socket.sendto(message, (broadcast_address, 13117))
-        print(f"Server started, listening on IP address: {ip}")
         time.sleep(2)  # sleep to avoid busy waiting
 
 
-def save_client_info(client_socket):
-    # Receive data from the client
-    received_data = client_socket.recv(1024) # Adjust buffer size as needed
-    client_name = received_data.decode().strip()
-    active_connections.append(client_socket) # Might need a lock here in the future
-    print(f"Welcome {client_name}")
+def save_client_info(client_socket, client_address):
+    global active_clients
+    if client_address not in active_clients:
+        # Receive data from the client
+        received_data = client_socket.recv(1024)  # Adjust buffer size as needed
+        client_name = received_data.decode('utf-8').rstrip('\n')
+        active_clients[client_address] = {"name": client_name, "socket": client_socket}  # Might need a lock here in the future
+
 
 def watch_for_inactivity(stop_event):
     global last_connection_time
@@ -101,18 +103,18 @@ def tcp_listener(server_port, stop_event):
             with time_lock:
                 global last_connection_time
                 last_connection_time = time.time()
-            threading.Thread(target=save_client_info, args=(client_socket,)).start()
+            # Handle the connection in a new thread
+            threading.Thread(target=save_client_info, args=(client_socket, client_address)).start()
+            threading.Thread(target=watch_for_inactivity, args=(stop_event,)).start()
         except socket.timeout:
             continue  # just loop back to check the stop event which will probably be set on.
-
-        # Handle the connection in a new thread
-        threading.Thread(target=save_client_info, args=(client_socket,)).start()
 
 
 if __name__ == "__main__":
     stop_event = threading.Event()
     server_port = find_free_port()
     # Initialize threads
+    print(f"Server started, listening on IP address: {get_local_ip()}")
     udp_thread = threading.Thread(target=udp_broadcast, args=("Trivia King", server_port, stop_event))
     tcp_thread = threading.Thread(target=tcp_listener, args=(server_port, stop_event))
 
@@ -128,4 +130,6 @@ if __name__ == "__main__":
     udp_thread.join()
     tcp_thread.join()
 
-    # Start game mode phase
+    print(active_clients)
+
+    # Game mode !
