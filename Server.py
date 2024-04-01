@@ -81,7 +81,6 @@ def watch_for_inactivity(stop_event):
         with time_lock:
             elapsed = time.time() - last_connection_time
         if elapsed >= 10:
-            print("Timeout reached without new connections. Stopping server.")
             stop_event.set()
             break
         else:
@@ -116,15 +115,15 @@ def welcome_message(server_name,trivia_topic,clients_dict):
     for client_tuple in enumerate(list(clients_dict.keys()), start=1):
         client_info = clients_dict[client_tuple[1]]
         message += f"Player{client_tuple[0]}: {client_info['name']}\n"
+    message_encoded = message.encode('utf-8')
     for client in clients_dict.values():
-        client["socket"].sendall(message)
-
+        client["socket"].sendall(message_encoded)
+    print(message)
 
 
 if __name__ == "__main__":
     stop_event = threading.Event()
     server_port = find_free_port()
-    global server_name
     # Initialize threads
     print(f"Server started, listening on IP address: {get_local_ip()}")
     udp_thread = threading.Thread(target=udp_broadcast, args=(server_name, server_port, stop_event))
@@ -142,8 +141,7 @@ if __name__ == "__main__":
     udp_thread.join()
     tcp_thread.join()
 
-    print(active_clients)
-
     # Game mode !
 
-    # server sends welcome message to all of the players:
+    # Server sends welcome message to all of the players:
+    welcome_message(server_name, trivia_topic, active_clients)

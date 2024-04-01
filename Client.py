@@ -4,7 +4,6 @@ import threading
 import time
 
 import select
-import Server
 import struct
 
 
