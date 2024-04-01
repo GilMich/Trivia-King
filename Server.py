@@ -9,8 +9,8 @@ from concurrent.futures import ThreadPoolExecutor
 active_clients = {}
 last_connection_time = time.time()
 time_lock = threading.Lock()
-
-
+server_name = "Trivia King"
+trivia_topic = "The Olympics"
 def get_local_ip():
     """
     Retrieves the local IP address of the machine.
@@ -107,15 +107,27 @@ def tcp_listener(server_port, stop_event):
             threading.Thread(target=save_client_info, args=(client_socket, client_address)).start()
             threading.Thread(target=watch_for_inactivity, args=(stop_event,)).start()
         except socket.timeout:
-            continue  # just loop back to check the stop event which will probably be set on.
+            continue  # if a client already connected while waiting for another one, the stop event will be true here. if nobody connected we will just keep waiting
+
+
+def welcome_message(server_name,trivia_topic,clients_dict):
+    message = f"welcome to the {server_name} server where we will be answering trivia questions about {trivia_topic}.\n"
+    # It's a good practice to list keys to avoid RuntimeError for changing dict size during iteration
+    for client_tuple in enumerate(list(clients_dict.keys()), start=1):
+        client_info = clients_dict[client_tuple[1]]
+        message += f"Player{client_tuple[0]}: {client_info['name']}\n"
+    for client in clients_dict.values():
+        client["socket"].sendall(message)
+
 
 
 if __name__ == "__main__":
     stop_event = threading.Event()
     server_port = find_free_port()
+    global server_name
     # Initialize threads
     print(f"Server started, listening on IP address: {get_local_ip()}")
-    udp_thread = threading.Thread(target=udp_broadcast, args=("Trivia King", server_port, stop_event))
+    udp_thread = threading.Thread(target=udp_broadcast, args=(server_name, server_port, stop_event))
     tcp_thread = threading.Thread(target=tcp_listener, args=(server_port, stop_event))
 
     # Start threads
@@ -124,7 +136,7 @@ if __name__ == "__main__":
 
     # Wait for the stop_event to be set
     while not stop_event.is_set():
-        stop_event.wait(timeout=5)  # wait to avoid busy waiting
+        stop_event.wait(timeout=10)  # wait to avoid busy waiting
 
     # Ensure both udp thread and tcp thread completed
     udp_thread.join()
@@ -133,3 +145,5 @@ if __name__ == "__main__":
     print(active_clients)
 
     # Game mode !
+
+    # server sends welcome message to all of the players:
