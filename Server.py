@@ -4,13 +4,14 @@ import threading
 import time
 import netifaces
 from random import choice
-from concurrent.futures import ThreadPoolExecutor
 
 active_clients = {}
 last_connection_time = time.time()
 time_lock = threading.Lock()
 server_name = "Trivia King"
 trivia_topic = "The Olympics"
+
+
 def get_local_ip():
     """
     Retrieves the local IP address of the machine.
@@ -72,7 +73,8 @@ def save_client_info(client_socket, client_address):
         # Receive data from the client
         received_data = client_socket.recv(1024)  # Adjust buffer size as needed
         client_name = received_data.decode('utf-8').rstrip('\n')
-        active_clients[client_address] = {"name": client_name, "socket": client_socket}  # Might need a lock here in the future
+        active_clients[client_address] = {"name": client_name,
+                                          "socket": client_socket, "stats": None}  # Might need a lock here in the future
 
 
 def watch_for_inactivity(stop_event):
@@ -94,13 +96,12 @@ def tcp_listener(server_port, stop_event):
     server_socket.listen()  # Listen for incoming connections
     server_socket.settimeout(10)  # timeout for accepting new requests
     print(f"Server is listening for TCP connections on port {server_port}")
-
+    global last_connection_time
     while not stop_event.is_set():
         try:
             client_socket, client_address = server_socket.accept()  # blocking method to accept new connection. if it waits here more than 10sec it will go to except
             print(f"Accepted a connection from {client_address}")
             with time_lock:
-                global last_connection_time
                 last_connection_time = time.time()
             # Handle the connection in a new thread
             threading.Thread(target=save_client_info, args=(client_socket, client_address)).start()
@@ -109,12 +110,12 @@ def tcp_listener(server_port, stop_event):
             continue  # if a client already connected while waiting for another one, the stop event will be true here. if nobody connected we will just keep waiting
 
 
-def welcome_message(server_name,trivia_topic,clients_dict):
+def welcome_message(server_name, trivia_topic, clients_dict):
     message = f"welcome to the {server_name} server where we will be answering trivia questions about {trivia_topic}.\n"
     # It's a good practice to list keys to avoid RuntimeError for changing dict size during iteration
     for client_tuple in enumerate(list(clients_dict.keys()), start=1):
         client_info = clients_dict[client_tuple[1]]
-        message += f"Player{client_tuple[0]}: {client_info['name']}\n"
+        message += f"Player {client_tuple[0]}: {client_info['name']}\n"
     message_encoded = message.encode('utf-8')
     for client in clients_dict.values():
         client["socket"].sendall(message_encoded)
@@ -145,3 +146,17 @@ if __name__ == "__main__":
 
     # Server sends welcome message to all of the players:
     welcome_message(server_name, trivia_topic, active_clients)
+
+    # TODO Load 20 trivia questions from Chat gpt about the olympics and save them hard coded
+
+    # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
+
+        # TODO send first random question to all the players - the clients (new function)
+
+        # TODO another function to receive inputs from the players while still liestening and saving all the users input *multi threaded
+
+        # TODO collect interesting statistics when the game finished
+
+    # ----------------------------------------------------------------------------------------------------------------------------------------------- #
+
+    # TODO check how to use ANSI color

@@ -1,9 +1,6 @@
 import errno
 import socket as sock
-import threading
 import time
-
-import select
 import struct
 
 
@@ -88,7 +85,10 @@ if __name__ == "__main__":
             break
     server_name, server_ip, server_port = result_from_looking
     server_tcp_socket = connect_to_server(server_ip, server_port)
+    while True:
+        message_encoded = server_tcp_socket.recv(1024)
+        message_decoded = message_encoded.decode('utf-8')
+        print(message_decoded)
+        time.sleep(1)
 
-    message_encoded = server_tcp_socket.recv(1024)
-    message_decoded = message_encoded.decode('utf-8')
-    print(message_decoded)
+    #TODO implement getting 1,Y.T or 0,F,N from the keyboard and transmit via tcp to the server
