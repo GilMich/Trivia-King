@@ -3,11 +3,12 @@ import socket as sock
 import threading
 import time
 import netifaces
-from random import choice
+import random
 
 active_clients = {}
 last_connection_time = time.time()
 time_lock = threading.Lock()
+clients_lock = threading.Lock()
 server_name = "Trivia King"
 trivia_topic = "The Olympics"
 
@@ -74,7 +75,9 @@ def save_client_info(client_socket, client_address):
         received_data = client_socket.recv(1024)  # Adjust buffer size as needed
         client_name = received_data.decode('utf-8').rstrip('\n')
         active_clients[client_address] = {"name": client_name,
-                                          "socket": client_socket, "stats": None}  # Might need a lock here in the future
+                                          "socket": client_socket,
+                                          "stats": None, "currently_listening_to_client": False,
+                                          "client_last_answer": None}  # Might need a lock here in the future
 
 
 def watch_for_inactivity(stop_event):
@@ -122,6 +125,62 @@ def welcome_message(server_name, trivia_topic, clients_dict):
     print(message)
 
 
+def send_trivia_question():
+    random_trivia = random.choice(olympics_trivia_questions)
+    trivia_question = random_trivia[0]
+    trivia_answer = random_trivia[1]
+
+    message = "True or False: " + trivia_question
+    for client in active_clients.values():
+        client["socket"].sendall()
+
+    return trivia_answer
+
+
+def get_answer_from_client(client_address, client_socket):
+    client_answer_encoded = client_socket.recv(1024)
+    client_answer_decoded = client_answer_encoded.decode('utf-8')
+    if "true" in client_answer_decoded:
+        with clients_lock:
+            active_clients[client_address]["client_last_answer"] = True
+
+    elif "false" in client_answer_decoded:
+        with clients_lock:
+            active_clients[client_address]["client_last_answer"] = True
+
+    else:
+        print("alon gay")  # handle dumb client response
+
+
+def get_all_answers():
+    for client_address in active_clients.keys():
+        client_socket = client_address["socket"]
+        threading.Thread(target=get_answer_from_client, args=(client_address, client_socket)).start()
+
+
+olympics_trivia_questions = [
+    ("Has the United States ever hosted the Summer Olympics?", True),
+    ("Is the motto of the Olympics 'Faster, Higher, Stronger, Together'?", True),
+    ("Did the ancient Olympics originate in France?", False),
+    ("Are the Olympic rings colors black, green, red, yellow, and blue?", True),
+    ("Is golf an Olympic sport?", True),
+    ("Were the first modern Olympics held in 1896?", True),
+    ("Has every country in the world participated in the Olympics at least once?", False),
+    ("Are the Winter and Summer Olympics held in the same year?", False),
+    ("Did the original Olympic Games include women as participants?", False),
+    ("Is swimming a part of the Winter Olympics?", False),
+    ("Has Tokyo hosted the Summer Olympics more than once?", True),
+    ("Is the Olympic flame lit in Olympia, Greece, before each Games?", True),
+    ("Did Michael Phelps took the most gold medals in a single olympic in olympics history?", True),
+    ("Does the city hosting the Olympics also host the Paralympics shortly after?", True),
+    ("Was the marathon originally 26.2 miles when introduced to the Olympics?", False),
+    ("Do the Olympics take place every two years?", False),
+    ("Has a single country ever swept all medals in an Olympic event?", True),
+    ("Is figure skating a part of the Summer Olympics?", False),
+    ("Are Olympic gold medals made entirely of gold?", False),
+    ("Did the Olympic Games continue during World War II?", False)
+]
+
 if __name__ == "__main__":
     stop_event = threading.Event()
     server_port = find_free_port()
@@ -144,18 +203,16 @@ if __name__ == "__main__":
 
     # Game mode !
 
-    # Server sends welcome message to all of the players:
+    # Server sends welcome message to all the players:
     welcome_message(server_name, trivia_topic, active_clients)
-
-    # TODO Load 20 trivia questions from Chat gpt about the olympics and save them hard coded
 
     # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
 
-        # TODO send first random question to all the players - the clients (new function)
+    # TODO send first random question to all the players - the clients (new function)
 
-        # TODO another function to receive inputs from the players while still liestening and saving all the users input *multi threaded
+    # TODO another function to receive inputs from the players while still liestening and saving all the users input *multi threaded
 
-        # TODO collect interesting statistics when the game finished
+    # TODO collect interesting statistics when the game finished
 
     # ----------------------------------------------------------------------------------------------------------------------------------------------- #
 
