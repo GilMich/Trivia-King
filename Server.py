@@ -208,9 +208,9 @@ if __name__ == "__main__":
 
     # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
 
-    # TODO send first random question to all the players - the clients (new function)
+    # TODO send first random question to all the players - the clients (new function) - need to test this
 
-    # TODO another function to receive inputs from the players while still liestening and saving all the users input *multi threaded
+    # TODO another function to receive inputs from the players while still liestening and saving all the users input *multi threaded - need to test this
 
     # TODO collect interesting statistics when the game finished
 
