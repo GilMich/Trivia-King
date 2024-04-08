@@ -138,7 +138,13 @@ def send_trivia_question():
 
 
 def get_answer_from_client(client_address, client_socket):
-    client_answer_encoded = client_socket.recv(1024)
+    client_socket.settimeout(10)
+    try:
+        client_answer_encoded = client_socket.recv(1024)
+    except socket.timeout:
+        active_clients[client_address]["client_last_answer"] = None
+        return
+
     client_answer_decoded = client_answer_encoded.decode('utf-8')
     if "true" in client_answer_decoded:
         with clients_lock:
@@ -146,7 +152,7 @@ def get_answer_from_client(client_address, client_socket):
 
     elif "false" in client_answer_decoded:
         with clients_lock:
-            active_clients[client_address]["client_last_answer"] = True
+            active_clients[client_address]["client_last_answer"] = False
 
     else:
         print("alon gay")  # handle dumb client response

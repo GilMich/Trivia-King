@@ -2,7 +2,8 @@ import errno
 import socket as sock
 import time
 import struct
-
+import threading
+import queue
 
 def unpack_packet(data):
     # Define the format string for unpacking the packet
@@ -55,7 +56,7 @@ def looking_for_a_server():
     return server_name, server_ip, server_port
 
 
-def connect_to_server(server_ip, server_port):
+def connect_to_server(server_ip, server_port) -> sock:
     # Create a TCP/IP socket
     tcp_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
 
@@ -72,6 +73,39 @@ def connect_to_server(server_ip, server_port):
         print(f"Failed to connect to the server at {server_ip}:{server_port}: {e}")
         return None
 
+
+def get_answer_from_user() -> bool | None:
+    valid_true_keys = ["1", "t", "T", "y", "Y"]
+    valid_false_keys = ["0", "f", 'F', 'n', 'N']
+    confirmation_keys = {"y": True, "f": False}
+
+    def get_input(input_queue):
+        user_input = input("Enter something: ")
+        input_queue.put(user_input)
+
+    # Create a queue
+    input_queue = queue.Queue()
+
+    # Start the thread
+    input_thread = threading.Thread(target=get_input, args=(input_queue,))
+    input_thread.start()
+
+    try:
+        # Try to get input within 10 seconds
+        user_input = input_queue.get(timeout=10)
+    except queue.Empty:
+        # If no input was received within 10 seconds, print a message
+        print("No input received within 10 seconds.")
+        user_input = None
+
+    if user_input is None:
+        return None
+
+    elif user_input in valid_true_keys:
+        return True
+
+    elif user_input in valid_false_keys:
+        return False
 
 # Main client function
 if __name__ == "__main__":
@@ -91,4 +125,6 @@ if __name__ == "__main__":
         print(message_decoded)
         time.sleep(1)
 
-    #TODO implement getting 1,Y.T or 0,F,N from the keyboard and transmit via tcp to the server
+    # Todo missing function to get the welcome message from the server
+    # Todo missing function to get the trivia question from the server
+    # todo missing function to send the answer to the server
