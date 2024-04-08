@@ -1,9 +1,12 @@
 import errno
 import socket as sock
+import sys
 import time
 import struct
 import threading
 import queue
+import select
+import pyautogui
 
 def unpack_packet(data):
     # Define the format string for unpacking the packet
@@ -74,14 +77,33 @@ def connect_to_server(server_ip, server_port) -> sock:
         return None
 
 
+def print_welcome_message(server_tcp_socket: sock) -> None:
+    message_encoded = server_tcp_socket.recv(1024)
+    message_decoded = message_encoded.decode('utf-8')
+    print(message_decoded)
+
+
+def print_trivia_question(server_tcp_socket: sock):
+    message_encoded = server_tcp_socket.recv(1024)
+    message_decoded = message_encoded.decode('utf-8')
+    print(message_decoded)
+
+
 def get_answer_from_user() -> bool | None:
     valid_true_keys = ["1", "t", "T", "y", "Y"]
     valid_false_keys = ["0", "f", 'F', 'n', 'N']
     confirmation_keys = {"y": True, "f": False}
+    stop_event = threading.Event()
+    # Function to get input from the user and put it in a queue in a separate thread
 
     def get_input(input_queue):
-        user_input = input("Enter something: ")
-        input_queue.put(user_input)
+        while not stop_event.is_set():
+            user_input = input("enter [1, t, y] for True, [0, f, n] for False:")    # user can screw up the program here if he doesn't hit enter the thread will stay alive forever
+            if user_input in valid_true_keys or user_input in valid_false_keys:
+                input_queue.put(user_input)
+                break
+            else:
+                print("Invalid input. Please try again.")
 
     # Create a queue
     input_queue = queue.Queue()
@@ -89,7 +111,7 @@ def get_answer_from_user() -> bool | None:
     # Start the thread
     input_thread = threading.Thread(target=get_input, args=(input_queue,))
     input_thread.start()
-
+    input_thread.join(timeout=10)
     try:
         # Try to get input within 10 seconds
         user_input = input_queue.get(timeout=10)
@@ -97,7 +119,8 @@ def get_answer_from_user() -> bool | None:
         # If no input was received within 10 seconds, print a message
         print("No input received within 10 seconds.")
         user_input = None
-
+        # Set the stop event to stop the input thread
+        stop_event.set()
     if user_input is None:
         return None
 
@@ -106,6 +129,10 @@ def get_answer_from_user() -> bool | None:
 
     elif user_input in valid_false_keys:
         return False
+
+def send_answer_to_server(server_tcp_socket: sock, user_answer: bool) -> None:
+    message = "true" if user_answer else "false"
+    server_tcp_socket.sendall(message.encode())
 
 # Main client function
 if __name__ == "__main__":
@@ -118,13 +145,18 @@ if __name__ == "__main__":
         elif type(result_from_looking) == tuple:
             break
     server_name, server_ip, server_port = result_from_looking
-    server_tcp_socket = connect_to_server(server_ip, server_port)
     while True:
-        message_encoded = server_tcp_socket.recv(1024)
-        message_decoded = message_encoded.decode('utf-8')
-        print(message_decoded)
+        server_tcp_socket = connect_to_server(server_ip, server_port)
+        if server_tcp_socket is not None:
+            break
         time.sleep(1)
 
-    # Todo missing function to get the welcome message from the server
-    # Todo missing function to get the trivia question from the server
+    print_welcome_message(server_tcp_socket)
+    print_trivia_question(server_tcp_socket)
+    user_answer = get_answer_from_user()
+    if user_answer is None:
+        print("No answer received within 10 seconds.")
+    elif user_answer:
+        print("You answered True.")
+
     # todo missing function to send the answer to the server
