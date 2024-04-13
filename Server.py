@@ -125,14 +125,13 @@ def welcome_message(server_name, trivia_topic, clients_dict):
     print(message)
 
 
-def send_trivia_question():
+def send_trivia_question() -> bool:
     random_trivia = random.choice(olympics_trivia_questions)
     trivia_question = random_trivia[0]
     trivia_answer = random_trivia[1]
-
     message = "True or False: " + trivia_question
     for client in active_clients.values():
-        client["socket"].sendall()
+        client["socket"].sendall(trivia_question.encode('utf-8'))
 
     return trivia_answer
 
@@ -160,9 +159,9 @@ def get_answer_from_client(client_address, client_socket):
 
 def get_all_answers():
     for client_address in active_clients.keys():
-        client_socket = client_address["socket"]
+        client_socket = active_clients[client_address]["socket"]
         threading.Thread(target=get_answer_from_client, args=(client_address, client_socket)).start()
-
+    time.sleep(10)
 
 olympics_trivia_questions = [
     ("Has the United States ever hosted the Summer Olympics?", True),
@@ -212,6 +211,9 @@ if __name__ == "__main__":
     # Server sends welcome message to all the players:
     welcome_message(server_name, trivia_topic, active_clients)
 
+    trivia_answer = send_trivia_question()
+    get_all_answers()
+    print(active_clients)
     # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
 
     # TODO send first random question to all the players - the clients (new function) - need to test this

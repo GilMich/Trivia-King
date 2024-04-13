@@ -8,6 +8,7 @@ import queue
 import select
 import pyautogui
 
+
 def unpack_packet(data):
     # Define the format string for unpacking the packet
     # '>'  stands for big-endian, meaning the first decoded part of the packet will be stored in the first variable basically meaning that encoding happens from left to right
@@ -89,32 +90,33 @@ def print_trivia_question(server_tcp_socket: sock):
     print(message_decoded)
 
 
+def get_input(input_queue, valid_keys, stop_event):
+    while not stop_event.is_set():
+        user_input = input(
+            "enter [1, t, y] for True, [0, f, n] for False:")  # user can screw up the program here if he doesn't hit enter the thread will stay alive forever
+        if user_input in valid_keys:
+            input_queue.put(user_input)
+            break
+        else:
+            print("Invalid input. Please try again.")
+
+
 def get_answer_from_user() -> bool | None:
     valid_true_keys = ["1", "t", "T", "y", "Y"]
     valid_false_keys = ["0", "f", 'F', 'n', 'N']
-    confirmation_keys = {"y": True, "f": False}
+    valid_keys = valid_true_keys + valid_false_keys
     stop_event = threading.Event()
     # Function to get input from the user and put it in a queue in a separate thread
-
-    def get_input(input_queue):
-        while not stop_event.is_set():
-            user_input = input("enter [1, t, y] for True, [0, f, n] for False:")    # user can screw up the program here if he doesn't hit enter the thread will stay alive forever
-            if user_input in valid_true_keys or user_input in valid_false_keys:
-                input_queue.put(user_input)
-                break
-            else:
-                print("Invalid input. Please try again.")
 
     # Create a queue
     input_queue = queue.Queue()
 
     # Start the thread
-    input_thread = threading.Thread(target=get_input, args=(input_queue,))
+    input_thread = threading.Thread(target=get_input, args=(input_queue, valid_keys, stop_event))
     input_thread.start()
-    input_thread.join(timeout=10)
     try:
         # Try to get input within 10 seconds
-        user_input = input_queue.get(timeout=10)
+        user_input = input_queue.get(block=True, timeout=10)
     except queue.Empty:
         # If no input was received within 10 seconds, print a message
         print("No input received within 10 seconds.")
@@ -130,9 +132,16 @@ def get_answer_from_user() -> bool | None:
     elif user_input in valid_false_keys:
         return False
 
-def send_answer_to_server(server_tcp_socket: sock, user_answer: bool) -> None:
-    message = "true" if user_answer else "false"
+
+def send_answer_to_server(server_tcp_socket: sock, user_answer: bool | None) -> None:
+    if user_answer is None:
+        message = "none"
+    elif user_answer:
+        message = "true"
+    else:
+        message = "false"
     server_tcp_socket.sendall(message.encode())
+
 
 # Main client function
 if __name__ == "__main__":
@@ -154,9 +163,6 @@ if __name__ == "__main__":
     print_welcome_message(server_tcp_socket)
     print_trivia_question(server_tcp_socket)
     user_answer = get_answer_from_user()
-    if user_answer is None:
-        print("No answer received within 10 seconds.")
-    elif user_answer:
-        print("You answered True.")
+    send_answer_to_server(server_tcp_socket, user_answer)
 
     # todo missing function to send the answer to the server
