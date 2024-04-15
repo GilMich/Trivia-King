@@ -8,7 +8,26 @@ import queue
 import select
 import pyautogui
 
+def handle_socket_error(e):
+    """
+    Handle different types of socket errors based on the exception instance.
 
+    Parameters:
+        e (Exception): The exception instance caught during socket operations.
+
+    Returns:
+        str: A user-friendly error message describing the error.
+    """
+    if isinstance(e, sock.timeout):
+        print("Socket timed out while waiting for data.")
+    elif isinstance(e, BlockingIOError):
+        print("Non-blocking socket operation could not be completed immediately.")
+    elif isinstance(e, ConnectionResetError):
+        print("Connection was forcibly closed by the remote host.")
+    elif isinstance(e, OSError):
+        print(f"Socket error occurred: {e}")
+    else:
+        print("An unexpected error occurred.")
 def unpack_packet(data):
     # Define the format string for unpacking the packet
     # '>'  stands for big-endian, meaning the first decoded part of the packet will be stored in the first variable basically meaning that encoding happens from left to right
@@ -67,15 +86,26 @@ def connect_to_server(server_ip, server_port) -> sock:
     try:
         # Connect the socket to the server's address and port
         tcp_socket.connect((server_ip, server_port))
-        print(f"Successfully connected to the server at {server_ip}:{server_port}")
 
-        # Immediately sends the player name before the game started.
-        message = "Gil\n"
-        tcp_socket.sendall(message.encode())
-        return tcp_socket
     except sock.error as e:
         print(f"Failed to connect to the server at {server_ip}:{server_port}: {e}")
         return None
+
+    print(f"Successfully connected to the server at {server_ip}:{server_port}")
+    # Immediately sends the player name before the game started.
+    while True:
+        player_name = input("Please enter your name: \n")
+        name_message = f"{player_name}\n"
+        tcp_socket.sendall(name_message.encode())
+        try:
+            response = tcp_socket.recv(1024)
+        except Exception as e:
+            handle_socket_error(e)
+            return None
+        # todo handle response: name accepted or not
+
+
+    return tcp_socket
 
 
 def print_welcome_message(server_tcp_socket: sock) -> None:
