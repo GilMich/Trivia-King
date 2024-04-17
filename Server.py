@@ -116,7 +116,7 @@ def tcp_listener(server_port, stop_event):
 
 
 def welcome_message(server_name, trivia_topic, clients_dict):
-    message = f'Welcome to the "{server_name}" server where we will be answering trivia questions about {trivia_topic}.\n'
+    message = f"Welcome to the {server_name} server, where we are be answering trivia questions about {trivia_topic}.\n"
     # It's a good practice to list keys to avoid RuntimeError for changing dict size during iteration
     for client_tuple in enumerate(list(clients_dict.keys()), start=1):
         client_info = clients_dict[client_tuple[1]]
