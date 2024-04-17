@@ -74,7 +74,7 @@ def looking_for_a_server():
         return -4
 
     server_ip = addr[0]
-    print(f"Received offer from server '{server_name}'at address {addr[0]}, attempting to connect...")
+    print(f'Received offer from server "{server_name}" at address {addr[0]}, attempting to connect...')
     return server_name, server_ip, server_port
 
 
