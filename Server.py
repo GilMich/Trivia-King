@@ -5,7 +5,7 @@ import time
 import netifaces
 import random
 
-active_clients = {}
+clients_dict = {}
 last_connection_time = time.time()
 time_lock = threading.Lock()
 clients_lock = threading.Lock()
@@ -69,15 +69,17 @@ def udp_broadcast(server_name, server_port, stop_event):
 
 
 def save_client_info(client_socket, client_address):
-    global active_clients
-    if client_address not in active_clients:
+    global clients_dict
+    if client_address not in clients_dict:
         # Receive data from the client
         received_data = client_socket.recv(1024)  # Adjust buffer size as needed
         client_name = received_data.decode('utf-8').rstrip('\n')
-        active_clients[client_address] = {"name": client_name,
-                                          "socket": client_socket,
-                                          "stats": None, "currently_listening_to_client": False,
-                                          "client_last_answer": None}  # Might need a lock here in the future
+        clients_dict[client_address] = {"name": client_name,
+                                        "socket": client_socket,
+                                        "currently_listening_to_client": False,
+                                        "client_last_answer": None,
+                                        "client_answers": [],
+                                        "answers_time": []}
 
 
 def watch_for_inactivity(stop_event):
@@ -131,37 +133,55 @@ def send_trivia_question():
     trivia_answer = random_trivia[1]
 
     message = "True or False: " + trivia_question
-    for client in active_clients.values():
-        client["socket"].sendall()
+    for client in clients_dict.values():
+        client["socket"].sendall(message.encode('utf-8'))
 
     return trivia_answer
 
 
 def get_answer_from_client(client_address, client_socket):
-    client_socket.settimeout(10)
+    client_socket.settimeout(12)
     try:
         client_answer_encoded = client_socket.recv(1024)
     except socket.timeout:
-        active_clients[client_address]["client_last_answer"] = None
+        clients_dict[client_address]["client_last_answer"].append(None)
         return
 
     client_answer_decoded = client_answer_encoded.decode('utf-8')
     if "true" in client_answer_decoded:
         with clients_lock:
-            active_clients[client_address]["client_last_answer"] = True
+            clients_dict[client_address]["client_last_answer"].append(True)
 
     elif "false" in client_answer_decoded:
         with clients_lock:
-            active_clients[client_address]["client_last_answer"] = False
+            clients_dict[client_address]["client_last_answer"].append(False)
 
     else:
         print("alon gay")  # handle dumb client response
 
 
 def get_all_answers():
-    for client_address in active_clients.keys():
-        client_socket = client_address["socket"]
+    for client_address in clients_dict.keys():
+        client_socket = clients_dict[client_address]["socket"]
         threading.Thread(target=get_answer_from_client, args=(client_address, client_socket)).start()
+
+
+def calculate_winner(correct_answer: bool) -> tuple | None:
+    """ this function will go over the dictionary and check who is the player
+    that answered correctly first, if exists. if no one answered correctly, it will return None """
+
+    min_timestamp = 99999999999
+    min_client_address = None
+    for client_address in clients_dict.keys():
+        client_answer = clients_dict[client_address]["client_answers"][-1]
+        if client_answer == correct_answer:
+            if clients_dict[client_address]["answers_time"][-1] < min_timestamp:
+                min_timestamp = clients_dict[client_address]["answers_time"][-1]
+                min_client = client_address
+    if min_client_address is None:
+        return None
+    else:
+        return min_client_address
 
 
 olympics_trivia_questions = [
@@ -210,8 +230,12 @@ if __name__ == "__main__":
     # Game mode !
 
     # Server sends welcome message to all the players:
-    welcome_message(server_name, trivia_topic, active_clients)
+    welcome_message(server_name, trivia_topic, clients_dict)
 
+    correct_answer = send_trivia_question()
+    get_all_answers()
+    winner_client_address = calculate_winner(correct_answer)
+    print(f"the winner is {clients_dict[winner_client_address]['name']}")
     # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
 
     # TODO send first random question to all the players - the clients (new function) - need to test this
