@@ -5,12 +5,55 @@ import time
 import netifaces
 import random
 
-active_clients = {}
+clients_dict = {}
 last_connection_time = time.time()
+user_successfully_connected = False
 time_lock = threading.Lock()
 clients_lock = threading.Lock()
 server_name = "Trivia King"
 trivia_topic = "The Olympics"
+
+def handle_socket_error(e, sock: socket, operation: str):
+    """
+     Handle exceptions for socket operations and print client IP involved.
+
+     Parameters:
+         :param sock: The socket instance involved in the operation.
+         :param e: (Exception): The exception instance caught during socket operations.
+         :param operation: (str): The operation during which the exception was caught ('connect', 'accept', etc.).
+
+     Returns:
+            None
+     """
+    client_info = ''
+    try:
+        if operation == 'accept' and sock:
+            # For accept, we need to check the last connected client, but it's usually not available directly
+            # because the exception prevents establishment of the connection.
+            client_info = 'Unknown.'
+        elif sock:
+            # Get information about the connected peer
+            client_info = sock.gethostname()
+        else:
+            client_info = 'Unknown.'
+    except sock.error:
+        # If get-hostname() fails, the socket is likely not connected
+        client_info = 'Unknown.'
+
+    base_error_message = f" Error during: {operation} with: {client_info}: {e}"
+
+    if isinstance(e, sock.timeout):
+        print(f" Timeout with {client_info} during {operation}.")
+    elif isinstance(e, sock.error):
+        print( base_error_message)
+    elif isinstance(e, BlockingIOError):
+        print(f"Non-blocking operation could not complete with {client_info} during {operation}.")
+    elif isinstance(e, ConnectionResetError):
+        print(f"Connection reset by the peer {client_info} during {operation}.")
+    elif isinstance(e, OSError):
+        print(base_error_message)
+    else:
+        print(f"An unexpected error occurred with {client_info} during {operation}.")
 
 
 def get_local_ip():
@@ -68,16 +111,36 @@ def udp_broadcast(server_name, server_port, stop_event):
         time.sleep(2)  # sleep to avoid busy waiting
 
 
-def save_client_info(client_socket, client_address):
-    global active_clients
-    if client_address not in active_clients:
+def save_client_info(client_socket, client_address, stop_event):    #todo need to edit return value to bool or int indicating error
+    global clients_dict
+    global last_connection_time
+    global user_successfully_connected
+    while not stop_event.is_set():
         # Receive data from the client
-        received_data = client_socket.recv(1024)  # Adjust buffer size as needed
+        client_socket.settimeout(20)
+        try:
+            received_data = client_socket.recv(1024)  # Adjust buffer size as needed
+        except Exception as e:
+            handle_socket_error(e  , client_socket, "recv")
+            continue
+
         client_name = received_data.decode('utf-8').rstrip('\n')
-        active_clients[client_address] = {"name": client_name,
-                                          "socket": client_socket,
-                                          "stats": None, "currently_listening_to_client": False,
-                                          "client_last_answer": None}  # Might need a lock here in the future
+        if client_name not in clients_dict.keys():
+            clients_dict[client_name] = {"address": client_address, "socket": client_socket, "client_answers": [], "answers_time": [], "rounds_won": 0}
+            client_socket.sendall(f"Welcome {client_name}, please wait for all clients to join...\n".encode('utf-8'))
+            with time_lock:
+                user_successfully_connected = True
+                last_connection_time = time.time()
+            break # break the loop if the name is unique
+        else:
+            try:
+                client_socket.sendall(f"The name {client_name} is already taken, please choose another one.\n".encode('utf-8'))
+            except Exception as e:
+                handle_socket_error(e, client_socket, "sendall")
+            continue
+
+
+        # todo handle at the client side
 
 
 def watch_for_inactivity(stop_event):
@@ -85,7 +148,7 @@ def watch_for_inactivity(stop_event):
     while not stop_event.is_set():
         with time_lock:
             elapsed = time.time() - last_connection_time
-        if elapsed >= 10:
+        if elapsed >= 10 and user_successfully_connected:
             stop_event.set()
             break
         else:
@@ -104,64 +167,82 @@ def tcp_listener(server_port, stop_event):
         try:
             client_socket, client_address = server_socket.accept()  # blocking method to accept new connection. if it waits here more than 10sec it will go to except
             print(f"Accepted a connection from {client_address}")
-            with time_lock:
-                last_connection_time = time.time()
             # Handle the connection in a new thread
-            threading.Thread(target=save_client_info, args=(client_socket, client_address)).start()
+            threading.Thread(target=save_client_info, args=(client_socket, client_address,stop_event)).start()
             threading.Thread(target=watch_for_inactivity, args=(stop_event,)).start()
-        except socket.timeout:
-            continue  # if a client already connected while waiting for another one, the stop event will be true here. if nobody connected we will just keep waiting
+        except Exception as e:
+            handle_socket_error(e, server_socket, "accept")
+
+        continue  # if a client already connected while waiting for another one, the stop event will be true here. if nobody connected we will just keep waiting
 
 
 def welcome_message(server_name, trivia_topic, clients_dict):
     message = f"welcome to the {server_name} server where we will be answering trivia questions about {trivia_topic}.\n"
     # It's a good practice to list keys to avoid RuntimeError for changing dict size during iteration
-    for client_tuple in enumerate(list(clients_dict.keys()), start=1):
-        client_info = clients_dict[client_tuple[1]]
-        message += f"Player {client_tuple[0]}: {client_info['name']}\n"
+    for client_index, client_name in enumerate(list(clients_dict.keys()), start=1):
+        message += f"Player {client_index}: {client_name}\n"
     message_encoded = message.encode('utf-8')
     for client in clients_dict.values():
         client["socket"].sendall(message_encoded)
     print(message)
 
 
-def send_trivia_question():
+def send_trivia_question() -> bool:
     random_trivia = random.choice(olympics_trivia_questions)
     trivia_question = random_trivia[0]
     trivia_answer = random_trivia[1]
-
-    message = "True or False: " + trivia_question
-    for client in active_clients.values():
-        client["socket"].sendall()
+    message = "True or False: " + trivia_question + "\n"
+    for client_name in clients_dict.keys():
+        try:
+            clients_dict[client_name]["socket"].sendall(message.encode('utf-8'))
+        except Exception as e:
+            print(f"Error sending trivia question to {client_name}: {e}")
 
     return trivia_answer
 
 
-def get_answer_from_client(client_address, client_socket):
-    client_socket.settimeout(10)
+def get_answer_from_client(client_address, client_socket, question_start_time)
+    client_socket.settimeout(15)
     try:
         client_answer_encoded = client_socket.recv(1024)
     except socket.timeout:
-        active_clients[client_address]["client_last_answer"] = None
+        clients_dict[client_address]["client_answers"].append(None)
         return
 
+    clients_dict[client_address]["answers_time"].append(time.time())
     client_answer_decoded = client_answer_encoded.decode('utf-8')
     if "true" in client_answer_decoded:
-        with clients_lock:
-            active_clients[client_address]["client_last_answer"] = True
+        clients_dict[client_address]["client_answers"].append(True)
 
     elif "false" in client_answer_decoded:
-        with clients_lock:
-            active_clients[client_address]["client_last_answer"] = False
+        clients_dict[client_address]["client_answers"].append(False)
 
     else:
-        print("alon gay")  # handle dumb client response
+        print("alon gay")  # this shouldn't happen
 
 
-def get_all_answers():
-    for client_address in active_clients.keys():
-        client_socket = client_address["socket"]
-        threading.Thread(target=get_answer_from_client, args=(client_address, client_socket)).start()
+def get_all_answers(question_start_time: float):
+    for client_address in clients_dict.keys():
+        client_socket = clients_dict[client_address]["socket"]
+        threading.Thread(target=get_answer_from_client, args=(client_address, client_socket,question_start_time)).start()
+
+
+def calculate_winner(correct_answer: bool) -> tuple | None:
+    """ this function will go over the dictionary and check who is the player
+    that answered correctly first, if exists. if no one answered correctly, it will return None """
+
+    min_timestamp = 99999999999
+    min_client_address = None
+    for client_address in clients_dict.keys():
+        client_answer = clients_dict[client_address]["client_answers"][-1]
+        if client_answer == correct_answer:
+            if clients_dict[client_address]["answers_time"][-1] < min_timestamp:
+                min_timestamp = clients_dict[client_address]["answers_time"][-1]
+                min_client = client_address
+    if min_client_address is None:
+        return None
+    else:
+        return min_client_address
 
 
 olympics_trivia_questions = [
@@ -210,16 +291,24 @@ if __name__ == "__main__":
     # Game mode !
 
     # Server sends welcome message to all the players:
-    welcome_message(server_name, trivia_topic, active_clients)
+    welcome_message(server_name, trivia_topic, clients_dict)
+
+    trivia_answer = send_trivia_question()
+    question_start_time = time.time()
+    get_all_answers()
+    winner_address = calculate_winner(trivia_answer)
+    print()
 
     # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
-
-    # TODO send first random question to all the players - the clients (new function) - need to test this
-
-    # TODO another function to receive inputs from the players while still liestening and saving all the users input *multi threaded - need to test this
-
+    # TODO
+    # TODO implement functionality to determine the first (!) one who answers correctly if exists using a timestamp... need to test
+    # TODO show how many seconds passed since the question was sent until every player answered for those who answered correctly
+    # TODO save for every player how many rounds won in a row
+    # TODO implement function to re-send trivia question if no one answered correctly.
     # TODO collect interesting statistics when the game finished
-
+    # TODO
     # ----------------------------------------------------------------------------------------------------------------------------------------------- #
 
     # TODO check how to use ANSI color
+
+
