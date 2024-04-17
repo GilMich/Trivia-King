@@ -70,6 +70,7 @@ def udp_broadcast(server_name, server_port, stop_event):
 
 def save_client_info(client_socket, client_address):
     global clients_dict
+    client_socket.settimeout(15)
     if client_address not in clients_dict:
         # Receive data from the client
         received_data = client_socket.recv(1024)  # Adjust buffer size as needed
@@ -77,7 +78,6 @@ def save_client_info(client_socket, client_address):
         clients_dict[client_address] = {"name": client_name,
                                         "socket": client_socket,
                                         "currently_listening_to_client": False,
-                                        "client_last_answer": None,
                                         "client_answers": [],
                                         "answers_time": []}
 
@@ -140,32 +140,38 @@ def send_trivia_question():
 
 
 def get_answer_from_client(client_address, client_socket):
-    client_socket.settimeout(12)
+    client_socket.settimeout(20)
     try:
         client_answer_encoded = client_socket.recv(1024)
     except socket.timeout:
-        clients_dict[client_address]["client_last_answer"].append(None)
+        clients_dict[client_address]["client_answers"].append(0)
         return
 
     client_answer_decoded = client_answer_encoded.decode('utf-8')
     if "true" in client_answer_decoded:
         with clients_lock:
-            clients_dict[client_address]["client_last_answer"].append(True)
+            clients_dict[client_address]["client_answers"].append(True)
 
     elif "false" in client_answer_decoded:
         with clients_lock:
-            clients_dict[client_address]["client_last_answer"].append(False)
+            clients_dict[client_address]["client_answers"].append(False)
 
     else:
         print("alon gay")  # handle dumb client response
 
 
 def get_all_answers():
+    list_of_threads = []
     for client_address in clients_dict.keys():
         client_socket = clients_dict[client_address]["socket"]
-        threading.Thread(target=get_answer_from_client, args=(client_address, client_socket)).start()
+        thread = threading.Thread(target=get_answer_from_client, args=(client_address, client_socket))
+        thread.start()
+        list_of_threads.append(thread)  # Store the thread reference in the list
 
-
+    # Wait for all threads to complete
+    for thread in list_of_threads:
+        thread.join()
+    time.sleep(1)
 def calculate_winner(correct_answer: bool) -> tuple | None:
     """ this function will go over the dictionary and check who is the player
     that answered correctly first, if exists. if no one answered correctly, it will return None """
@@ -175,9 +181,10 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
     for client_address in clients_dict.keys():
         client_answer = clients_dict[client_address]["client_answers"][-1]
         if client_answer == correct_answer:
-            if clients_dict[client_address]["answers_time"][-1] < min_timestamp:
-                min_timestamp = clients_dict[client_address]["answers_time"][-1]
-                min_client = client_address
+            min_client_address = client_address
+            # if clients_dict[client_address]["answers_time"][-1] < min_timestamp:
+            #     min_timestamp = clients_dict[client_address]["answers_time"][-1]
+            #     min_client = client_address
     if min_client_address is None:
         return None
     else:

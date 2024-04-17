@@ -5,8 +5,7 @@ import time
 import struct
 import threading
 import queue
-import select
-import pyautogui
+
 
 def handle_socket_error(e):
     """
@@ -93,17 +92,9 @@ def connect_to_server(server_ip, server_port) -> sock:
 
     print(f"Successfully connected to the server at {server_ip}:{server_port}")
     # Immediately sends the player name before the game started.
-    while True:
-        player_name = input("Please enter your name: \n")
-        name_message = f"{player_name}\n"
-        tcp_socket.sendall(name_message.encode())
-        try:
-            response = tcp_socket.recv(1024)
-        except Exception as e:
-            handle_socket_error(e)
-            return None
-        # todo handle response: name accepted or not
-
+    player_name = input("Please enter your name: \n")
+    name_message = f"{player_name}\n"
+    tcp_socket.sendall(name_message.encode())
 
     return tcp_socket
 
@@ -146,7 +137,7 @@ def get_answer_from_user() -> bool | None:
     input_thread.start()
     try:
         # Try to get input within 10 seconds
-        user_input = input_queue.get(block=True, timeout=10)
+        user_input = input_queue.get(block=True, timeout=20)
     except queue.Empty:
         # If no input was received within 10 seconds, print a message
         print("No input received within 10 seconds.")
