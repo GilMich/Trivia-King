@@ -6,11 +6,39 @@ import netifaces
 import random
 
 clients_dict = {}
-last_connection_time = time.time()
+last_connection_time = 99999999999
 time_lock = threading.Lock()
 clients_lock = threading.Lock()
 server_name = "Trivia King"
 trivia_topic = "The Olympics"
+def handle_socket_error(exception, operation, function):
+    """
+    Handles exceptions raised during socket operations.
+
+    Args:
+    exception: The exception instance that was raised.
+    operation: A string describing the socket operation during which the error occurred.
+    function: A string indicating the function name where the error occurred.
+
+    This function prints a detailed error message based on the type of socket exception, the operation, and the function where it happened.
+    """
+    error_type = type(exception).__name__
+    error_message = str(exception)
+
+    print(f"Error occurred in function '{function}' during {operation}.")
+    print(f"Error Type: {error_type}")
+    print(f"Error Details: {error_message}")
+
+    if isinstance(exception, sock.timeout):
+        print("This was a timeout error. Please check network conditions and retry.")
+    elif isinstance(exception, sock.error):
+        print("A general socket error occurred. Please check the socket operation and parameters.")
+    elif isinstance(exception, sock.gaierror):
+        print("An address-related error occurred. Please verify the network address details.")
+    elif isinstance(exception, sock.herror):
+        print("A host-related error occurred. Check DNS configurations and host availability.")
+    else:
+        print("An unexpected type of error occurred. Please consult system logs or network settings.")
 
 
 def get_local_ip():
@@ -48,7 +76,6 @@ def find_free_port():
 
 def udp_broadcast(server_name, server_port, stop_event):
     broadcast_address = get_default_broadcast()
-
     # Sets a socekt instance for udp broadcasting
     udp_socket = sock.socket(sock.AF_INET, sock.SOCK_DGRAM)
     udp_socket.setsockopt(sock.SOL_SOCKET, sock.SO_BROADCAST, 1)
@@ -70,17 +97,22 @@ def udp_broadcast(server_name, server_port, stop_event):
 
 def save_client_info(client_socket, client_address):
     global clients_dict
+    global last_connection_time
     if client_address not in clients_dict:
-        # Receive data from the client
-        received_data = client_socket.recv(1024)  # Adjust buffer size as needed
+        try:
+            received_data = client_socket.recv(1024)  # Adjust buffer size as needed
+        except Exception as e:
+            handle_socket_error(e, "receiving data", "save_client_info")
+            return
+
         client_name = received_data.decode('utf-8').rstrip('\n')
         clients_dict[client_address] = {"name": client_name,
                                         "socket": client_socket,
                                         "currently_listening_to_client": False,
-                                        "client_last_answer": None,
                                         "client_answers": [],
-                                        "answers_time": []}
-
+                                        "answers_times": []}
+        last_connection_time = time.time()
+    # if the client is already in the dictionary, do nothing. the client is already connected from previous round.
 
 def watch_for_inactivity(stop_event):
     global last_connection_time
@@ -94,7 +126,6 @@ def watch_for_inactivity(stop_event):
             # Sleep briefly to avoid busy waiting
             time.sleep(1)
 
-
 def tcp_listener(server_port, stop_event):
     server_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
     server_socket.bind(('', server_port))  # Bind to the specified port on all interfaces
@@ -106,17 +137,18 @@ def tcp_listener(server_port, stop_event):
         try:
             client_socket, client_address = server_socket.accept()  # blocking method to accept new connection. if it waits here more than 10sec it will go to except
             print(f"Accepted a connection from {client_address}")
-            with time_lock:
-                last_connection_time = time.time()
-            # Handle the connection in a new thread
             threading.Thread(target=save_client_info, args=(client_socket, client_address)).start()
             threading.Thread(target=watch_for_inactivity, args=(stop_event,)).start()
-        except socket.timeout:
-            continue  # if a client already connected while waiting for another one, the stop event will be true here. if nobody connected we will just keep waiting
+        except Exception as e:
+            if isinstance(e, sock.timeout):
+                continue
+            else:
+                handle_socket_error(e, "accepting new connections", "tcp_listening")
+        continue  # if a client already connected while waiting for another one, the stop event will be true here. if nobody connected we will just keep waiting
 
 
 def welcome_message(server_name, trivia_topic, clients_dict):
-    message = f"welcome to the {server_name} server where we will be answering trivia questions about {trivia_topic}.\n"
+    message = f"Welcome to the {server_name} server, where we are be answering trivia questions about {trivia_topic}.\n"
     # It's a good practice to list keys to avoid RuntimeError for changing dict size during iteration
     for client_tuple in enumerate(list(clients_dict.keys()), start=1):
         client_info = clients_dict[client_tuple[1]]
@@ -134,38 +166,50 @@ def send_trivia_question():
 
     message = "True or False: " + trivia_question
     for client in clients_dict.values():
-        client["socket"].sendall(message.encode('utf-8'))
-
+        try:
+            client["socket"].sendall(message.encode('utf-8'))
+        except Exception as e:
+            handle_socket_error(e, "sendall", "sending_trivia_question")
+            continue
     return trivia_answer
 
 
-def get_answer_from_client(client_address, client_socket):
-    client_socket.settimeout(12)
+def get_answer_from_client(client_address, client_socket, trivia_sending_time):
+    client_socket.settimeout(15)
     try:
         client_answer_encoded = client_socket.recv(1024)
-    except socket.timeout:
-        clients_dict[client_address]["client_last_answer"].append(None)
+    except Exception as e:
+        handle_socket_error(e, "receiving data", "get_answer_from_client")
+        clients_dict[client_address]["client_answers"].append(0) # if the client didn't answer in 15 seconds, put in 0 to mark that
+        clients_dict[client_address]["answers_times"].append(20) # if the client didn't answer in 15 seconds, put in 20 seconds to mark that
         return
-
+    client_time_to_answer = round((time.time() - trivia_sending_time), 2)
+    clients_dict[client_address]["answers_times"].append(client_time_to_answer)
     client_answer_decoded = client_answer_encoded.decode('utf-8')
     if "true" in client_answer_decoded:
         with clients_lock:
-            clients_dict[client_address]["client_last_answer"].append(True)
+            clients_dict[client_address]["client_answers"].append(True)
 
     elif "false" in client_answer_decoded:
         with clients_lock:
-            clients_dict[client_address]["client_last_answer"].append(False)
+            clients_dict[client_address]["client_answers"].append(False)
 
     else:
-        print("alon gay")  # handle dumb client response
+        print("Invalid answer received. Bug maybe?")
+        return
 
 
-def get_all_answers():
+def get_all_answers(trivia_sending_time: float):
+    list_of_threads = []
     for client_address in clients_dict.keys():
         client_socket = clients_dict[client_address]["socket"]
-        threading.Thread(target=get_answer_from_client, args=(client_address, client_socket)).start()
+        thread = threading.Thread(target=get_answer_from_client, args=(client_address, client_socket, trivia_sending_time))
+        thread.start()
+        list_of_threads.append(thread)  # Store the thread reference in the list
 
-
+    # Wait for all threads to complete
+    for thread in list_of_threads:
+        thread.join()
 def calculate_winner(correct_answer: bool) -> tuple | None:
     """ this function will go over the dictionary and check who is the player
     that answered correctly first, if exists. if no one answered correctly, it will return None """
@@ -174,10 +218,10 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
     min_client_address = None
     for client_address in clients_dict.keys():
         client_answer = clients_dict[client_address]["client_answers"][-1]
-        if client_answer == correct_answer:
-            if clients_dict[client_address]["answers_time"][-1] < min_timestamp:
-                min_timestamp = clients_dict[client_address]["answers_time"][-1]
-                min_client = client_address
+        client_time = clients_dict[client_address]["answers_times"][-1]
+        if client_answer == correct_answer and client_time < min_timestamp:
+            min_client_address = client_address
+            min_timestamp = client_time
     if min_client_address is None:
         return None
     else:
@@ -233,9 +277,10 @@ if __name__ == "__main__":
     welcome_message(server_name, trivia_topic, clients_dict)
 
     correct_answer = send_trivia_question()
-    get_all_answers()
+    trivia_sending_time = time.time()
+    get_all_answers(trivia_sending_time)
     winner_client_address = calculate_winner(correct_answer)
-    print(f"the winner is {clients_dict[winner_client_address]['name']}")
+    print(f"the winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
     # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
 
     # TODO send first random question to all the players - the clients (new function) - need to test this
