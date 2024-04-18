@@ -165,7 +165,6 @@ def get_all_answers():
         client_socket = clients_dict[client_address]["socket"]
         threading.Thread(target=get_answer_from_client, args=(client_address, client_socket)).start()
 
-
 def calculate_winner(correct_answer: bool) -> tuple | None:
     """ this function will go over the dictionary and check who is the player
     that answered correctly first, if exists. if no one answered correctly, it will return None """
