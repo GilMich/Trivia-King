@@ -11,6 +11,8 @@ time_lock = threading.Lock()
 clients_lock = threading.Lock()
 server_name = "Trivia King"
 trivia_topic = "The Olympics"
+active_players = 0
+
 def handle_socket_error(exception, operation, function):
     """
     Handles exceptions raised during socket operations.
@@ -210,6 +212,7 @@ def get_all_answers(trivia_sending_time: float):
     # Wait for all threads to complete
     for thread in list_of_threads:
         thread.join()
+
 def calculate_winner(correct_answer: bool) -> tuple | None:
     """ this function will go over the dictionary and check who is the player
     that answered correctly first, if exists. if no one answered correctly, it will return None """
@@ -275,12 +278,15 @@ if __name__ == "__main__":
 
     # Server sends welcome message to all the players:
     welcome_message(server_name, trivia_topic, clients_dict)
-
-    correct_answer = send_trivia_question()
-    trivia_sending_time = time.time()
-    get_all_answers(trivia_sending_time)
-    winner_client_address = calculate_winner(correct_answer)
-    print(f"the winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
+    while True:
+        correct_answer = send_trivia_question()
+        trivia_sending_time = time.time()
+        get_all_answers(trivia_sending_time)
+        winner_client_address = calculate_winner(correct_answer)
+        if not winner_client_address:
+            print("No user wins")
+            continue
+        print(f"the winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
     # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
 
     # TODO send first random question to all the players - the clients (new function) - need to test this
