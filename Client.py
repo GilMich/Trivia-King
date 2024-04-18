@@ -5,29 +5,38 @@ import time
 import struct
 import threading
 import queue
-import select
-import pyautogui
 
-def handle_socket_error(e):
+
+def handle_socket_error(exception, operation, function):
     """
-    Handle different types of socket errors based on the exception instance.
+    Handles exceptions raised during socket operations.
 
-    Parameters:
-        e (Exception): The exception instance caught during socket operations.
+    Args:
+    exception: The exception instance that was raised.
+    operation: A string describing the socket operation during which the error occurred.
+    function: A string indicating the function name where the error occurred.
 
-    Returns:
-        str: A user-friendly error message describing the error.
+    This function prints a detailed error message based on the type of socket exception, the operation, and the function where it happened.
     """
-    if isinstance(e, sock.timeout):
-        print("Socket timed out while waiting for data.")
-    elif isinstance(e, BlockingIOError):
-        print("Non-blocking socket operation could not be completed immediately.")
-    elif isinstance(e, ConnectionResetError):
-        print("Connection was forcibly closed by the remote host.")
-    elif isinstance(e, OSError):
-        print(f"Socket error occurred: {e}")
+    error_type = type(exception).__name__
+    error_message = str(exception)
+
+    print(f"Error occurred in function '{function}' during {operation}.")
+    print(f"Error Type: {error_type}")
+    print(f"Error Details: {error_message}")
+
+    if isinstance(exception, sock.timeout):
+        print("This was a timeout error. Please check network conditions and retry.")
+    elif isinstance(exception, sock.error):
+        print("A general socket error occurred. Please check the socket operation and parameters.")
+    elif isinstance(exception, sock.gaierror):
+        print("An address-related error occurred. Please verify the network address details.")
+    elif isinstance(exception, sock.herror):
+        print("A host-related error occurred. Check DNS configurations and host availability.")
     else:
-        print("An unexpected error occurred.")
+        print("An unexpected type of error occurred. Please consult system logs or network settings.")
+
+
 def unpack_packet(data):
     # Define the format string for unpacking the packet
     # '>'  stands for big-endian, meaning the first decoded part of the packet will be stored in the first variable basically meaning that encoding happens from left to right
@@ -75,7 +84,7 @@ def looking_for_a_server():
         return -4
 
     server_ip = addr[0]
-    print(f"Received offer from server '{server_name}'at address {addr[0]}, attempting to connect...")
+    print(f'Received offer from server "{server_name}" at address {addr[0]}, attempting to connect...')
     return server_name, server_ip, server_port
 
 
@@ -93,17 +102,9 @@ def connect_to_server(server_ip, server_port) -> sock:
 
     print(f"Successfully connected to the server at {server_ip}:{server_port}")
     # Immediately sends the player name before the game started.
-    while True:
-        player_name = input("Please enter your name: \n")
-        name_message = f"{player_name}\n"
-        tcp_socket.sendall(name_message.encode())
-        try:
-            response = tcp_socket.recv(1024)
-        except Exception as e:
-            handle_socket_error(e)
-            return None
-        # todo handle response: name accepted or not
-
+    player_name = input("Please enter your name: \n")
+    name_message = f"{player_name}\n"
+    tcp_socket.sendall(name_message.encode())
 
     return tcp_socket
 
@@ -146,7 +147,7 @@ def get_answer_from_user() -> bool | None:
     input_thread.start()
     try:
         # Try to get input within 10 seconds
-        user_input = input_queue.get(block=True, timeout=10)
+        user_input = input_queue.get(block=True, timeout=20)
     except queue.Empty:
         # If no input was received within 10 seconds, print a message
         print("No input received within 10 seconds.")
