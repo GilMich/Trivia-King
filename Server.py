@@ -110,7 +110,7 @@ def save_client_info(client_socket, client_address):
         client_name = received_data.decode('utf-8').rstrip('\n')
         clients_dict[client_address] = {"name": client_name,
                                         "socket": client_socket,
-                                        "currently_listening_to_client": False,
+                                        "currently_listening_to_client": True,
                                         "client_answers": [],
                                         "answers_times": []}
         last_connection_time = time.time()
@@ -254,6 +254,27 @@ olympics_trivia_questions = [
     ("Did the Olympic Games continue during World War II?", False)
 ]
 
+def remove_client(client_address, clients_dict):
+    if client_address in clients_dict:
+        clients_dict[client_address]['currently_listening_to_client'] = False  # Mark the client as inactive instead of deleting
+        print(f"Client {clients_dict[client_address]['name']} disconnected.")
+
+def main_game_loop(clients_dict):
+    # Run the loop only if there are active clients
+    if any(client['currently_listening_to_client'] for client in clients_dict.values()):
+        welcome_message(server_name, trivia_topic, clients_dict)
+        correct_answer = send_trivia_question()
+        trivia_sending_time = time.time()
+        get_all_answers(trivia_sending_time)
+        winner_client_address = calculate_winner(correct_answer)
+        if not winner_client_address:
+            print("No user wins this round.")
+            return
+        print(f"The winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
+    # else:
+    #     print("No active clients. Waiting for players...")
+
+
 if __name__ == "__main__":
     stop_event = threading.Event()
     server_port = find_free_port()
@@ -277,16 +298,20 @@ if __name__ == "__main__":
     # Game mode !
 
     # Server sends welcome message to all the players:
-    welcome_message(server_name, trivia_topic, clients_dict)
-    while True:
-        correct_answer = send_trivia_question()
-        trivia_sending_time = time.time()
-        get_all_answers(trivia_sending_time)
-        winner_client_address = calculate_winner(correct_answer)
-        if not winner_client_address:
-            print("No user wins")
-            continue
-        print(f"the winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
+    try:
+        while True:
+            main_game_loop(clients_dict)
+            time.sleep(1)  # Adjust timing as needed
+    except KeyboardInterrupt:
+        print("Shutting down the server.")
+        stop_event.set()
+    finally:
+        udp_thread.join()
+        tcp_thread.join()
+        for client in clients_dict.values():
+            if client['socket']:
+                client['socket'].close()
+        print("Server shutdown completed.")
     # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
 
     # TODO send first random question to all the players - the clients (new function) - need to test this
