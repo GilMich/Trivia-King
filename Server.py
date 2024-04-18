@@ -227,6 +227,22 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
     else:
         return min_client_address
 
+def send_winner_message(winner_address: tuple, correct_answer: bool) -> bool:
+    if winner_address is None:
+        print("No one answered correctly.")
+        return True
+    send_winner_success = True
+    winner_name = clients_dict[winner_address]["name"]
+    winner_time = clients_dict[winner_address]["answers_times"][-1]
+    message = f"The winner is {winner_name} with a time of {winner_time} seconds. The correct answer was {correct_answer}."
+    for client in clients_dict.values():
+        try:
+            client["socket"].sendall(message.encode('utf-8'))
+        except Exception as e:
+            handle_socket_error(e, "sendall", "send_winner_message")
+            send_winner_success = False
+            continue
+    return send_winner_success
 
 olympics_trivia_questions = [
     ("Has the United States ever hosted the Summer Olympics?", True),
@@ -280,7 +296,7 @@ if __name__ == "__main__":
     trivia_sending_time = time.time()
     get_all_answers(trivia_sending_time)
     winner_client_address = calculate_winner(correct_answer)
-    print(f"the winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
+    send_winner_message(winner_client_address, correct_answer)
     # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
 
     # TODO send first random question to all the players - the clients (new function) - need to test this

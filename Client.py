@@ -173,7 +173,10 @@ def send_answer_to_server(server_tcp_socket: sock, user_answer: bool | None) -> 
         message = "false"
     server_tcp_socket.sendall(message.encode())
 
-
+def print_game_results(server_tcp_socket: sock) -> None:
+    message_encoded = server_tcp_socket.recv(1024)
+    message_decoded = message_encoded.decode('utf-8')
+    print(message_decoded)
 # Main client function
 if __name__ == "__main__":
     while True:
@@ -195,5 +198,5 @@ if __name__ == "__main__":
     print_trivia_question(server_tcp_socket)
     user_answer = get_answer_from_user()
     send_answer_to_server(server_tcp_socket, user_answer)
-
+    print_game_results(server_tcp_socket)
     # todo missing function to send the answer to the server
