@@ -11,7 +11,9 @@ time_lock = threading.Lock()
 clients_lock = threading.Lock()
 server_name = "Trivia King"
 trivia_topic = "The Olympics"
-def handle_socket_error(exception, operation, function):
+
+
+def handle_socket_error(exception, operation, function, client_socket=None):
     """
     Handles exceptions raised during socket operations.
 
@@ -32,6 +34,7 @@ def handle_socket_error(exception, operation, function):
     if isinstance(exception, sock.timeout):
         print("This was a timeout error. Please check network conditions and retry.")
     elif isinstance(exception, sock.error):
+        client_socket.close()
         print("A general socket error occurred. Please check the socket operation and parameters.")
     elif isinstance(exception, sock.gaierror):
         print("An address-related error occurred. Please verify the network address details.")
@@ -114,6 +117,7 @@ def save_client_info(client_socket, client_address):
         last_connection_time = time.time()
     # if the client is already in the dictionary, do nothing. the client is already connected from previous round.
 
+
 def watch_for_inactivity(stop_event):
     global last_connection_time
     while not stop_event.is_set():
@@ -125,6 +129,7 @@ def watch_for_inactivity(stop_event):
         else:
             # Sleep briefly to avoid busy waiting
             time.sleep(1)
+
 
 def tcp_listener(server_port, stop_event):
     server_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
@@ -138,9 +143,10 @@ def tcp_listener(server_port, stop_event):
         try:
             client_socket, client_address = server_socket.accept()  # blocking method to accept new connection. if it waits here more than 10sec it will go to except
             client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)  # Enable keepalive probes
-            client_socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPIDLE, 2)  # Idle time before starting probes
-            client_socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPINTVL, 2)  # Interval between probes
-            client_socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPCNT, 2)  # Number of failed probes before declaring dead
+            client_socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPIDLE, 1)  # Idle time before starting probes
+            client_socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPINTVL, 1)  # Interval between probes
+            client_socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPCNT,
+                                     2)  # Number of failed probes before declaring dead
             print(f"Accepted a connection from {client_address}")
             threading.Thread(target=save_client_info, args=(client_socket, client_address)).start()
             threading.Thread(target=watch_for_inactivity, args=(stop_event,)).start()
@@ -149,7 +155,6 @@ def tcp_listener(server_port, stop_event):
                 continue
             else:
                 handle_socket_error(e, "accepting new connections", "tcp_listening")
-
 
 
 def welcome_message(server_name, trivia_topic, clients_dict):
@@ -184,9 +189,11 @@ def get_answer_from_client(client_address, client_socket, trivia_sending_time):
     try:
         client_answer_encoded = client_socket.recv(1024)
     except Exception as e:
-        handle_socket_error(e, "receiving data", "get_answer_from_client")
-        clients_dict[client_address]["client_answers"].append(0) # if the client didn't answer in 15 seconds, put in 0 to mark that
-        clients_dict[client_address]["answers_times"].append(20) # if the client didn't answer in 15 seconds, put in 20 seconds to mark that
+        handle_socket_error(e, "receiving data", "get_answer_from_client",client_socket)
+        clients_dict[client_address]["client_answers"].append(
+            0)  # if the client didn't answer in 15 seconds, put in 0 to mark that
+        clients_dict[client_address]["answers_times"].append(
+            20)  # if the client didn't answer in 15 seconds, put in 20 seconds to mark that
         return
     client_time_to_answer = round((time.time() - trivia_sending_time), 2)
     clients_dict[client_address]["answers_times"].append(client_time_to_answer)
@@ -208,13 +215,16 @@ def get_all_answers(trivia_sending_time: float):
     list_of_threads = []
     for client_address in clients_dict.keys():
         client_socket = clients_dict[client_address]["socket"]
-        thread = threading.Thread(target=get_answer_from_client, args=(client_address, client_socket, trivia_sending_time))
+        thread = threading.Thread(target=get_answer_from_client,
+                                  args=(client_address, client_socket, trivia_sending_time))
         thread.start()
         list_of_threads.append(thread)  # Store the thread reference in the list
 
     # Wait for all threads to complete
     for thread in list_of_threads:
-        thread.join()
+        thread.join(timeout=10)
+
+
 def calculate_winner(correct_answer: bool) -> tuple | None:
     """ this function will go over the dictionary and check who is the player
     that answered correctly first, if exists. if no one answered correctly, it will return None """
@@ -232,6 +242,7 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
     else:
         return min_client_address
 
+
 def send_winner_message(winner_address: tuple, correct_answer: bool) -> bool:
     if winner_address is None:
         print("No one answered correctly.")
@@ -248,6 +259,14 @@ def send_winner_message(winner_address: tuple, correct_answer: bool) -> bool:
             send_winner_success = False
             continue
     return send_winner_success
+
+
+def remove_closed_sockets_clients():
+    for client_address in list(clients_dict.keys()):
+        client_socket = clients_dict[client_address]["socket"]
+        if client_socket.fileno() == -1:
+            del clients_dict[client_address]
+
 
 olympics_trivia_questions = [
     ("Has the United States ever hosted the Summer Olympics?", True),
@@ -273,38 +292,43 @@ olympics_trivia_questions = [
 ]
 
 if __name__ == "__main__":
+
     stop_event = threading.Event()
     server_port = find_free_port()
     # Initialize threads
-    print(f"Server started, listening on IP address: {get_local_ip()}")
     udp_thread = threading.Thread(target=udp_broadcast, args=(server_name, server_port, stop_event))
     tcp_thread = threading.Thread(target=tcp_listener, args=(server_port, stop_event))
-
-    # Start threads
-    udp_thread.start()
-    tcp_thread.start()
-
-    # Wait for the stop_event to be set
-    while not stop_event.is_set():
-        stop_event.wait(timeout=10)  # wait to avoid busy waiting
-
-    # Ensure both udp thread and tcp thread completed
-    udp_thread.join()
-    tcp_thread.join()
-
-    # Game mode !
-
-    # Server sends welcome message to all the players:
-    welcome_message(server_name, trivia_topic, clients_dict)
     while True:
+        print(f"Server started, listening on IP address: {get_local_ip()}")
+        # Start threads
+        udp_thread.start()
+        tcp_thread.start()
+
+        # Wait for the stop_event to be set
+        while not stop_event.is_set():
+            stop_event.wait(timeout=10)  # wait to avoid busy waiting
+            udp_thread.join()
+            tcp_thread.join()
+
+        # Ensure both udp thread and tcp thread completed
+        udp_thread.join()
+        tcp_thread.join()
+
+        # Game mode !
+
+        # Server sends welcome message to all the players:
+        welcome_message(server_name, trivia_topic, clients_dict)
+        while len(clients_dict) > 0:
+            # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
+            correct_answer = send_trivia_question()
+            trivia_sending_time = time.time()
+            get_all_answers(trivia_sending_time)
+            winner_client_address = calculate_winner(correct_answer)
+            send_winner_message(winner_client_address, correct_answer)
+            time.sleep(2)
+            remove_closed_sockets_clients()
+            # todo make sure that there are sockets that are still open and not closed
         # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
-        correct_answer = send_trivia_question()
-        trivia_sending_time = time.time()
-        get_all_answers(trivia_sending_time)
-        winner_client_address = calculate_winner(correct_answer)
-        send_winner_message(winner_client_address, correct_answer)
-        #todo make sure that there are sockets that are still open and not closed
-    # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
 
     # TODO send first random question to all the players - the clients (new function) - need to test this
 
