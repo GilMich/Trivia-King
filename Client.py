@@ -164,36 +164,63 @@ def get_answer_from_user() -> bool | None:
         return False
 
 
-def send_answer_to_server(server_tcp_socket: sock, user_answer: bool | None) -> None:
-    if user_answer is None:
-        message = "none"
-    elif user_answer:
-        message = "true"
-    else:
-        message = "false"
-    server_tcp_socket.sendall(message.encode())
+def send_answer_to_server(server_tcp_socket, user_answer):
+    """
+    Sends the user's answer to the server and checks if the operation was successful.
+    Returns True if the message was sent successfully, False otherwise.
+    """
+    try:
+        # Prepare the message
+        if user_answer is None:
+            message = "none"
+        elif user_answer:
+            message = "true"
+        else:
+            message = "false"
+
+        # Send the message
+        server_tcp_socket.sendall(message.encode())
+        return True
+
+    except sock.error as e:
+        # Print the error and return False if an error occurred
+        print(f"Failed to send answer to server: {e}")
+        return False
 
 
 # Main client function
 if __name__ == "__main__":
-    while True:
-        result_from_looking = looking_for_a_server()
-        # Error Handling
-        if type(result_from_looking) == int:
-            time.sleep(1)
-            continue
-        elif type(result_from_looking) == tuple:
-            break
-    server_name, server_ip, server_port = result_from_looking
-    while True:
-        server_tcp_socket = connect_to_server(server_ip, server_port)
-        if server_tcp_socket is not None:
-            break
-        time.sleep(1)
+    gameOn = True
+    server_tcp_socket = None
 
-    print_welcome_message(server_tcp_socket)
-    print_trivia_question(server_tcp_socket)
-    user_answer = get_answer_from_user()
-    send_answer_to_server(server_tcp_socket, user_answer)
+    while gameOn:
+        if server_tcp_socket is None:
+            server_name, server_ip, server_port = looking_for_a_server()
+            server_tcp_socket = connect_to_server(server_ip, server_port)
+            if server_tcp_socket is None:
+                time.sleep(1)
+                continue  # If connection fails, restart the loop to try again
+            print_welcome_message(server_tcp_socket)
+
+        try:
+            print_trivia_question(server_tcp_socket)
+            user_answer = get_answer_from_user()
+            if not send_answer_to_server(server_tcp_socket, user_answer):
+                raise ConnectionError("Lost connection to the server. Attempting to reconnect...")
+
+            user_input = input("Do you want to play another round? (yes/no): ")
+            if user_input.lower() != "yes":
+                gameOn = False
+                break
+            continue
+        except (sock.error, ConnectionError) as e:
+            print(e)
+            if server_tcp_socket:
+                server_tcp_socket.close()
+            server_tcp_socket = None  # Reset the connection
+
+    if server_tcp_socket:
+        server_tcp_socket.close()
+        print("Disconnected from the server.")
 
     # todo missing function to send the answer to the server
