@@ -178,7 +178,8 @@ def get_answer_from_client(client_address, client_socket, trivia_sending_time):
     client_socket.settimeout(15)
     try:
         client_answer_encoded = client_socket.recv(1024)
-    except socket.timeout:
+    except Exception as e:
+        handle_socket_error(e, "receiving data", "get_answer_from_client")
         clients_dict[client_address]["client_answers"].append(0) # if the client didn't answer in 15 seconds, put in 0 to mark that
         clients_dict[client_address]["answers_times"].append(20) # if the client didn't answer in 15 seconds, put in 20 seconds to mark that
         return
