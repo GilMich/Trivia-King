@@ -140,7 +140,7 @@ def tcp_listener(server_port, stop_event):
             threading.Thread(target=save_client_info, args=(client_socket, client_address)).start()
             threading.Thread(target=watch_for_inactivity, args=(stop_event,)).start()
         except Exception as e:
-            if Exception == sock.timeout:
+            if isinstance(e, sock.timeout):
                 continue
             else:
                 handle_socket_error(e, "accepting new connections", "tcp_listening")
