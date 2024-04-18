@@ -16,25 +16,30 @@ def handle_socket_error(exception, operation, function):
     operation: A string describing the socket operation during which the error occurred.
     function: A string indicating the function name where the error occurred.
 
-    This function prints a detailed error message based on the type of socket exception, the operation, and the function where it happened.
+    This function prints a detailed error message based on the type of socket exception, the operation, and the function where it happened. All messages are printed in red.
     """
     error_type = type(exception).__name__
     error_message = str(exception)
 
-    print(f"Error occurred in function '{function}' during {operation}.")
-    print(f"Error Type: {error_type}")
-    print(f"Error Details: {error_message}")
+    # Function to print messages in red
+    def print_red(message):
+        print(f"\033[31m{message}\033[0m")
+
+    print_red(f"Error occurred in function '{function}' during {operation}.")
+    print_red(f"Error Type: {error_type}")
+    print_red(f"Error Details: {error_message}")
 
     if isinstance(exception, sock.timeout):
-        print("This was a timeout error. Please check network conditions and retry.")
+        print_red("This was a timeout error. Please check network conditions and retry.")
     elif isinstance(exception, sock.error):
-        print("A general socket error occurred. Please check the socket operation and parameters.")
+        print_red("A general socket error occurred. Please check the socket operation and parameters.")
     elif isinstance(exception, sock.gaierror):
-        print("An address-related error occurred. Please verify the network address details.")
+        print_red("An address-related error occurred. Please verify the network address details.")
     elif isinstance(exception, sock.herror):
-        print("A host-related error occurred. Check DNS configurations and host availability.")
+        print_red("A host-related error occurred. Check DNS configurations and host availability.")
     else:
-        print("An unexpected type of error occurred. Please consult system logs or network settings.")
+        print_red("An unexpected type of error occurred. Please consult system logs or network settings.")
+
 
 
 def unpack_packet(data):
@@ -88,37 +93,49 @@ def looking_for_a_server():
     return server_name, server_ip, server_port
 
 
-def connect_to_server(server_ip, server_port) -> sock:
-    # Create a TCP/IP socket
-    tcp_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
-
+def connect_to_server(server_ip, server_port):
     try:
+        # Create a TCP/IP socket
+        tcp_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
         # Connect the socket to the server's address and port
         tcp_socket.connect((server_ip, server_port))
+        print(f"Successfully connected to the server at {server_ip}:{server_port}")
+
+        # Immediately sends the player name after the connection is established
+        player_name = input("Please enter your name: ")
+        name_message = f"{player_name}\n"
+        tcp_socket.sendall(name_message.encode())
+        return tcp_socket
 
     except sock.error as e:
-        print(f"Failed to connect to the server at {server_ip}:{server_port}: {e}")
+        handle_socket_error(e, "connect to server", "connect_to_server")
+        if tcp_socket:
+            tcp_socket.close()  # Ensure the socket is closed if an error occurs
         return None
 
-    print(f"Successfully connected to the server at {server_ip}:{server_port}")
-    # Immediately sends the player name before the game started.
-    player_name = input("Please enter your name: \n")
-    name_message = f"{player_name}\n"
-    tcp_socket.sendall(name_message.encode())
 
-    return tcp_socket
-
-
-def print_welcome_message(server_tcp_socket: sock) -> None:
-    message_encoded = server_tcp_socket.recv(1024)
-    message_decoded = message_encoded.decode('utf-8')
-    print(message_decoded)
+def print_welcome_message(server_tcp_socket):
+    try:
+        message_encoded = server_tcp_socket.recv(1024)
+        message_decoded = message_encoded.decode('utf-8')
+        print(message_decoded)
+    except sock.error as e:
+        handle_socket_error(e, "receiving welcome message", "print_welcome_message")
+        return False  # Return False if an error occurred
+    return True
 
 
-def print_trivia_question(server_tcp_socket: sock):
-    message_encoded = server_tcp_socket.recv(1024)
-    message_decoded = message_encoded.decode('utf-8')
-    print(message_decoded)
+def print_trivia_question(server_tcp_socket):
+    try:
+        message_encoded = server_tcp_socket.recv(1024)
+        if not message_encoded:
+            raise sock.error("Server closed connection")
+        message_decoded = message_encoded.decode('utf-8')
+        print(message_decoded)
+    except sock.error as e:
+        handle_socket_error(e, "receiving trivia question", "print_trivia_question")
+        return False  # Return False if an error occurred
+    return True
 
 
 def get_input(input_queue, valid_keys, stop_event):
@@ -181,10 +198,8 @@ def send_answer_to_server(server_tcp_socket, user_answer):
         # Send the message
         server_tcp_socket.sendall(message.encode())
         return True
-
     except sock.error as e:
-        # Print the error and return False if an error occurred
-        print(f"Failed to send answer to server: {e}")
+        handle_socket_error(e, "sending answer", "send_answer_to_server")
         return False
 
 
@@ -198,23 +213,17 @@ if __name__ == "__main__":
             server_name, server_ip, server_port = looking_for_a_server()
             server_tcp_socket = connect_to_server(server_ip, server_port)
             if server_tcp_socket is None:
-                time.sleep(1)
-                continue  # If connection fails, restart the loop to try again
-            print_welcome_message(server_tcp_socket)
+                time.sleep(1)  # Sleep before retrying
+                continue
 
-        try:
-            print_trivia_question(server_tcp_socket)
-            user_answer = get_answer_from_user()
-            if not send_answer_to_server(server_tcp_socket, user_answer):
-                raise ConnectionError("Lost connection to the server. Attempting to reconnect...")
+        if not print_welcome_message(server_tcp_socket) or not print_trivia_question(server_tcp_socket):
+            if server_tcp_socket:
+                server_tcp_socket.close()
+            server_tcp_socket = None
+            continue  # Skip further actions and attempt to reconnect
 
-            user_input = input("Do you want to play another round? (yes/no): ")
-            if user_input.lower() != "yes":
-                gameOn = False
-                break
-            continue
-        except (sock.error, ConnectionError) as e:
-            print(e)
+        user_answer = get_answer_from_user()
+        if not send_answer_to_server(server_tcp_socket, user_answer):
             if server_tcp_socket:
                 server_tcp_socket.close()
             server_tcp_socket = None  # Reset the connection
