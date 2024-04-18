@@ -95,6 +95,10 @@ def connect_to_server(server_ip, server_port) -> sock:
     try:
         # Connect the socket to the server's address and port
         tcp_socket.connect((server_ip, server_port))
+        tcp_socket.setsockopt(sock.SOL_SOCKET, sock.SO_KEEPALIVE, 1)  # Enable keepalive probes
+        tcp_socket.setsockopt(sock.SOL_TCP, sock.TCP_KEEPIDLE, 2)  # Idle time before starting probes
+        tcp_socket.setsockopt(sock.SOL_TCP, sock.TCP_KEEPINTVL, 2)  # Interval between probes
+        tcp_socket.setsockopt(sock.SOL_TCP, sock.TCP_KEEPCNT, 2)  # Number of failed probes before declaring dead
 
     except sock.error as e:
         print(f"Failed to connect to the server at {server_ip}:{server_port}: {e}")

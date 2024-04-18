@@ -131,11 +131,16 @@ def tcp_listener(server_port, stop_event):
     server_socket.bind(('', server_port))  # Bind to the specified port on all interfaces
     server_socket.listen()  # Listen for incoming connections
     server_socket.settimeout(10)  # timeout for accepting new requests
+
     print(f"Server is listening for TCP connections on port {server_port}")
     global last_connection_time
     while not stop_event.is_set():
         try:
             client_socket, client_address = server_socket.accept()  # blocking method to accept new connection. if it waits here more than 10sec it will go to except
+            client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)  # Enable keepalive probes
+            client_socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPIDLE, 2)  # Idle time before starting probes
+            client_socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPINTVL, 2)  # Interval between probes
+            client_socket.setsockopt(socket.SOL_TCP, socket.TCP_KEEPCNT, 2)  # Number of failed probes before declaring dead
             print(f"Accepted a connection from {client_address}")
             threading.Thread(target=save_client_info, args=(client_socket, client_address)).start()
             threading.Thread(target=watch_for_inactivity, args=(stop_event,)).start()
@@ -144,7 +149,7 @@ def tcp_listener(server_port, stop_event):
                 continue
             else:
                 handle_socket_error(e, "accepting new connections", "tcp_listening")
-        continue  # if a client already connected while waiting for another one, the stop event will be true here. if nobody connected we will just keep waiting
+
 
 
 def welcome_message(server_name, trivia_topic, clients_dict):
@@ -291,17 +296,19 @@ if __name__ == "__main__":
 
     # Server sends welcome message to all the players:
     welcome_message(server_name, trivia_topic, clients_dict)
-
-    correct_answer = send_trivia_question()
-    trivia_sending_time = time.time()
-    get_all_answers(trivia_sending_time)
-    winner_client_address = calculate_winner(correct_answer)
-    send_winner_message(winner_client_address, correct_answer)
+    while True:
+        # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
+        correct_answer = send_trivia_question()
+        trivia_sending_time = time.time()
+        get_all_answers(trivia_sending_time)
+        winner_client_address = calculate_winner(correct_answer)
+        send_winner_message(winner_client_address, correct_answer)
+        #todo make sure that there are sockets that are still open and not closed
     # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
 
     # TODO send first random question to all the players - the clients (new function) - need to test this
 
-    # TODO another function to receive inputs from the players while still liestening and saving all the users input *multi threaded - need to test this
+    # TODO another function to receive inputs from the players while still listening and saving all the users input *multi threaded - need to test this
 
     # TODO collect interesting statistics when the game finished
 
