@@ -202,34 +202,54 @@ def send_answer_to_server(server_tcp_socket, user_answer):
         handle_socket_error(e, "sending answer", "send_answer_to_server")
         return False
 
+def receive_message_from_server(server_tcp_socket):
+    try:
+        message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary
+        if not message_encoded:
+            print("Server has disconnected.")
+            return None
+        message = message_encoded.decode('utf-8')
+        print(message)
+        return message
+    except sock.error as e:
+        print(f"Error receiving message from server: {e}")
+        return None
 
 # Main client function
 if __name__ == "__main__":
-    gameOn = True
-    server_tcp_socket = None
-
-    while gameOn:
-        if server_tcp_socket is None:
+    while True:
+        try:
             server_name, server_ip, server_port = looking_for_a_server()
             server_tcp_socket = connect_to_server(server_ip, server_port)
-            if server_tcp_socket is None:
-                time.sleep(1)  # Sleep before retrying
-                continue
 
-        if not print_welcome_message(server_tcp_socket) or not print_trivia_question(server_tcp_socket):
+            print_welcome_message(server_tcp_socket)
+            print_trivia_question(server_tcp_socket)
+
+            user_answer = get_answer_from_user()
+            send_answer_to_server(server_tcp_socket, user_answer)
+            receive_message_from_server(server_tcp_socket)
+
+        except Exception as e:
+            print("Connection error:", e)
             if server_tcp_socket:
                 server_tcp_socket.close()
             server_tcp_socket = None
-            continue  # Skip further actions and attempt to reconnect
+        # time.sleep(5)  # Adjust timing as needed
 
-        user_answer = get_answer_from_user()
-        if not send_answer_to_server(server_tcp_socket, user_answer):
-            if server_tcp_socket:
-                server_tcp_socket.close()
-            server_tcp_socket = None  # Reset the connection
+        # if not print_welcome_message(server_tcp_socket) or not print_trivia_question(server_tcp_socket):
+        #     if server_tcp_socket:
+        #         server_tcp_socket.close()
+        #     server_tcp_socket = None
+        #     continue  # Skip further actions and attempt to reconnect
+        #
+        # user_answer = get_answer_from_user()
+        # if not send_answer_to_server(server_tcp_socket, user_answer):
+        #     if server_tcp_socket:
+        #         server_tcp_socket.close()
+        #     server_tcp_socket = None  # Reset the connection
 
-    if server_tcp_socket:
-        server_tcp_socket.close()
-        print("Disconnected from the server.")
+        # if server_tcp_socket:
+        #     server_tcp_socket.close()
+        #     print("Disconnected from the server.")
 
     # todo missing function to send the answer to the server

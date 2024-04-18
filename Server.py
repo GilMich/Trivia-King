@@ -4,6 +4,8 @@ import threading
 import time
 import netifaces
 import random
+from tabulate import tabulate
+
 
 clients_dict = {}
 last_connection_time = 99999999999
@@ -176,26 +178,25 @@ def send_trivia_question():
     return trivia_answer
 
 
+# Update to handle the client response
 def get_answer_from_client(client_address, client_socket, trivia_sending_time):
     client_socket.settimeout(15)
     try:
         client_answer_encoded = client_socket.recv(1024)
+        client_time_to_answer = round((time.time() - trivia_sending_time), 2)
     except Exception as e:
         handle_socket_error(e, "receiving data", "get_answer_from_client")
-        clients_dict[client_address]["client_answers"].append(0) # if the client didn't answer in 15 seconds, put in 0 to mark that
-        clients_dict[client_address]["answers_times"].append(20) # if the client didn't answer in 15 seconds, put in 20 seconds to mark that
+        clients_dict[client_address]["client_answers"].append(0) # if the client didn't answer, put in 0 to mark that
+        clients_dict[client_address]["answers_times"].append(20) # Put a default high time to indicate no response
         return
-    client_time_to_answer = round((time.time() - trivia_sending_time), 2)
     clients_dict[client_address]["answers_times"].append(client_time_to_answer)
     client_answer_decoded = client_answer_encoded.decode('utf-8')
     if "true" in client_answer_decoded:
         with clients_lock:
             clients_dict[client_address]["client_answers"].append(True)
-
     elif "false" in client_answer_decoded:
         with clients_lock:
             clients_dict[client_address]["client_answers"].append(False)
-
     else:
         print("Invalid answer received. Bug maybe?")
         return
@@ -259,59 +260,133 @@ def remove_client(client_address, clients_dict):
         clients_dict[client_address]['currently_listening_to_client'] = False  # Mark the client as inactive instead of deleting
         print(f"Client {clients_dict[client_address]['name']} disconnected.")
 
-def main_game_loop(clients_dict):
-    # Run the loop only if there are active clients
-    if any(client['currently_listening_to_client'] for client in clients_dict.values()):
-        welcome_message(server_name, trivia_topic, clients_dict)
-        correct_answer = send_trivia_question()
-        trivia_sending_time = time.time()
-        get_all_answers(trivia_sending_time)
-        winner_client_address = calculate_winner(correct_answer)
-        if not winner_client_address:
-            print("No user wins this round.")
-            return
-        print(f"The winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
-    # else:
-    #     print("No active clients. Waiting for players...")
+
+def send_statistics_to_all_clients(clients_dict):
+    headers = ["Player Name", "Correct Answers", "Average Time"]
+    table_data = []
+
+    for addr, info in clients_dict.items():
+        if info['currently_listening_to_client']:  # Ensure we only send to active clients
+            name = info['name']
+            correct_answers = sum(1 for answer in info['client_answers'] if answer)
+            total_time = sum(info['answers_times'])
+            count_times = len(info['answers_times'])
+            average_time = total_time / count_times if count_times > 0 else 0
+            # Append player data to the table list
+            table_data.append([name, correct_answers, f"{average_time:.2f} seconds"])
+
+    # Create a table using tabulate
+    stats_table = tabulate(table_data, headers=headers, tablefmt="pretty")
+
+    # Add a title to the table
+    title = "Game Statistics:"
+    # Prepending the title centered with newline for separation
+    formatted_table = f"\n{title}\n{stats_table}\n"
+
+    # Encode and send
+    stats_message_encoded = formatted_table.encode('utf-8')
+    for addr, info in clients_dict.items():
+        if info['currently_listening_to_client']:
+            try:
+                info['socket'].sendall(stats_message_encoded)
+            except Exception as e:
+                handle_socket_error(e, "sendall", "send_statistics_to_all_clients")
+                info['currently_listening_to_client'] = False  # Mark client as inactive if sending fails
+
+
+
+
+# def main_game_loop(clients_dict):
+#     # Run the loop only if there are active clients
+#     if any(client['currently_listening_to_client'] for client in clients_dict.values()):
+#         welcome_message(server_name, trivia_topic, clients_dict)
+#         correct_answer = send_trivia_question()
+#         trivia_sending_time = time.time()
+#         get_all_answers(trivia_sending_time)
+#         winner_client_address = calculate_winner(correct_answer)
+#
+#         if not winner_client_address:
+#             print("No user wins this round.")
+#         else:
+#             print(f"The winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
+#         send_statistics_to_all_clients(clients_dict)  # Call after a round to update clients
+#
+#     # else:
+#     #     print("No active clients. Waiting for players...")
+def close_all_client_sockets():
+    for client_info in clients_dict.values():
+        client_socket = client_info['socket']
+        if client_socket:
+            try:
+                client_socket.close()
+            except Exception as e:
+                print(f"Failed to close client socket: {e}")
+    clients_dict.clear()
 
 
 if __name__ == "__main__":
-    stop_event = threading.Event()
-    server_port = find_free_port()
-    # Initialize threads
-    print(f"Server started, listening on IP address: {get_local_ip()}")
-    udp_thread = threading.Thread(target=udp_broadcast, args=(server_name, server_port, stop_event))
-    tcp_thread = threading.Thread(target=tcp_listener, args=(server_port, stop_event))
+    while True:
+        server_port = find_free_port()
+        print(f"Server started, listening on IP address: {get_local_ip()}")
+        stop_event = threading.Event()
+        clients_dict = {}
 
-    # Start threads
-    udp_thread.start()
-    tcp_thread.start()
+        udp_thread = threading.Thread(target=udp_broadcast, args=(server_name, server_port, stop_event))
+        tcp_thread = threading.Thread(target=tcp_listener, args=(server_port, stop_event))
 
-    # Wait for the stop_event to be set
-    while not stop_event.is_set():
-        stop_event.wait(timeout=10)  # wait to avoid busy waiting
+        # Start threads
+        udp_thread.start()
+        tcp_thread.start()
 
-    # Ensure both udp thread and tcp thread completed
-    udp_thread.join()
-    tcp_thread.join()
+        try:
+            # Wait for the stop_event to be set
+            while not stop_event.is_set():
+                time.sleep(10)  # Reduced wait timeout for more responsive handling
+                print("Server running...")
+                # stop_event.wait(timeout=10)  # wait to avoid busy waiting
 
-    # Game mode !
 
-    # Server sends welcome message to all the players:
-    try:
-        while True:
-            main_game_loop(clients_dict)
-            time.sleep(1)  # Adjust timing as needed
-    except KeyboardInterrupt:
-        print("Shutting down the server.")
-        stop_event.set()
-    finally:
-        udp_thread.join()
-        tcp_thread.join()
-        for client in clients_dict.values():
-            if client['socket']:
-                client['socket'].close()
-        print("Server shutdown completed.")
+            if any(client['currently_listening_to_client'] for client in clients_dict.values()):
+                print("check")
+                welcome_message(server_name, trivia_topic, clients_dict)
+                correct_answer = send_trivia_question()
+                trivia_sending_time = time.time()
+                get_all_answers(trivia_sending_time)
+                winner_client_address = calculate_winner(correct_answer)
+
+                if not winner_client_address:
+                    print("No user wins this round.")
+                else:
+                    print(
+                        f"The winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
+
+                send_statistics_to_all_clients(clients_dict)  # Call after a round to update clients
+                # time.sleep(1)  # Adjust timing as needed
+                print("Round ends")
+                continue
+
+            udp_thread.join()
+            tcp_thread.join()
+
+            close_all_client_sockets()
+            # clients_dict.clear()
+            print("Server shutdown completed.")
+            # Clearing and reinitializing for a new round
+            time.sleep(5)
+
+        except KeyboardInterrupt:
+            print("Shutting down the server.")
+            stop_event.set()
+        # finally:
+        #     # Cleanup
+        #     udp_thread.join()
+        #     tcp_thread.join()
+        #
+        #     close_all_client_sockets()
+        #     # clients_dict.clear()
+        #     print("Server shutdown completed.")
+        #     # Clearing and reinitializing for a new round
+        #     time.sleep(5)
     # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
 
     # TODO send first random question to all the players - the clients (new function) - need to test this
