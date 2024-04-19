@@ -8,7 +8,6 @@ from tabulate import tabulate
 import json
 
 
-
 clients_dict = {}
 last_connection_time = 99999999999
 time_lock = threading.Lock()
@@ -17,9 +16,11 @@ server_name = "Trivia King"
 trivia_topic = "The Olympics"
 active_players = 0
 
+
 def load_trivia_questions(file_path):
     with open(file_path, 'r') as file:
         return json.load(file)
+
 
 def handle_socket_error(exception, operation, function):
     """
@@ -77,7 +78,8 @@ def get_default_broadcast():
     return broadcast
 
 
-# Finds an available tcp port for the server to send to the client in the UDP broadcast message, on which the server will listen on, and the client will connect to.
+# Finds an available tcp port for the server to send to the client in the UDP broadcast message,
+# on which the server will listen on, and the client will connect to.
 def find_free_port():
     with sock.socket(sock.AF_INET, sock.SOCK_STREAM) as s:
         s.bind(('', 0))  # Binding to port 0 tells the OS to pick an available port
@@ -124,6 +126,7 @@ def save_client_info(client_socket, client_address):
         last_connection_time = time.time()
     # if the client is already in the dictionary, do nothing. the client is already connected from previous round.
 
+
 def watch_for_inactivity(stop_event):
     global last_connection_time
     while not stop_event.is_set():
@@ -136,6 +139,7 @@ def watch_for_inactivity(stop_event):
             # Sleep briefly to avoid busy waiting
             time.sleep(1)
 
+
 def tcp_listener(server_port, stop_event):
     server_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
     server_socket.bind(('', server_port))  # Bind to the specified port on all interfaces
@@ -146,9 +150,10 @@ def tcp_listener(server_port, stop_event):
     while not stop_event.is_set():
         try:
             client_socket, client_address = server_socket.accept()  # blocking method to accept new connection. if it waits here more than 10sec it will go to except
-            print(f"Accepted a connection from {client_address}")
+            print(f"\n\033[32mAccepted\033[0m a connection from {client_address}")
             threading.Thread(target=save_client_info, args=(client_socket, client_address)).start()
             threading.Thread(target=watch_for_inactivity, args=(stop_event,)).start()
+
         except Exception as e:
             if isinstance(e, sock.timeout):
                 continue
@@ -184,7 +189,6 @@ def send_trivia_question(questions):
     return trivia_answer
 
 
-# Update to handle the client response
 def get_answer_from_client(client_address, client_socket, trivia_sending_time):
     client_socket.settimeout(15)
     try:
@@ -220,6 +224,7 @@ def get_all_answers(trivia_sending_time: float):
     for thread in list_of_threads:
         thread.join()
 
+
 def calculate_winner(correct_answer: bool) -> tuple | None:
     """ this function will go over the dictionary and check who is the player
     that answered correctly first, if exists. if no one answered correctly, it will return None """
@@ -237,10 +242,11 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
     else:
         return min_client_address
 
-def remove_client(client_address, clients_dict):
-    if client_address in clients_dict:
-        clients_dict[client_address]['currently_listening_to_client'] = False  # Mark the client as inactive instead of deleting
-        print(f"Client {clients_dict[client_address]['name']} disconnected.")
+
+# def remove_client(client_address, clients_dict):
+#     if client_address in clients_dict:
+#         clients_dict[client_address]['currently_listening_to_client'] = False  # Mark the client as inactive instead of deleting
+#         print(f"Client {clients_dict[client_address]['name']} disconnected.")
 
 
 def send_statistics_to_all_clients(clients_dict):
@@ -286,8 +292,60 @@ def close_all_client_sockets():
                 print(f"Failed to close client socket: {e}")
     clients_dict.clear()
 
+# new code
+def client_handler(client_socket, client_address):
+    try:
+        while True:
+            data = client_socket.recv(1024)
+            if not data:
+                raise ConnectionError("Client disconnected")
+            print(f"Received data from {client_address}: {data.decode()}")
+            client_socket.sendall("Response".encode())
+    except Exception as e:
+        print(f"Error handling client {client_address}: {e}")
+    finally:
+        remove_client(client_address)  # Clean up client from the server's list
+        client_socket.close()
+        print(f"Connection with {client_address} has been closed.")
+
+def monitor_clients():
+    while True:
+        time.sleep(10)
+        for client_address, client_info in list(clients_dict.items()):
+            if not is_client_alive(client_info['socket']):
+                remove_client(client_address)
+
+
+def is_client_alive(sock):
+    try:
+        # this is a non-blocking call
+        sock.setblocking(0)
+        data = sock.recv(16)
+        if not data:
+            return False
+        return True
+    except BlockingIOError:
+        return True  # No data, but still connected
+
+    except Exception:
+        return False
+
+
+def remove_client(client_address):
+    if client_address in clients_dict:
+        client_info = clients_dict.pop(client_address, None)
+        if client_info and client_info['socket']:
+            try:
+                client_info['socket'].shutdown(socket.SHUT_RDWR)
+                client_info['socket'].close()
+            except Exception as e:
+                print(f"Error closing socket for {client_address}: {e}")
+        print(f"\033[31mRemoved\033[0m client {client_address} from active clients.")
+
 
 if __name__ == "__main__":
+    threading.Thread(target=monitor_clients, daemon=True).start()
+
     while True:
         questions = load_trivia_questions("olympics_trivia_questions.json")
         server_port = find_free_port()
@@ -311,7 +369,7 @@ if __name__ == "__main__":
 
 
             if any(client['currently_listening_to_client'] for client in clients_dict.values()):
-                print("check")
+                print("clients dict stat: ", clients_dict)
                 welcome_message(server_name, trivia_topic, clients_dict)
                 correct_answer = send_trivia_question(questions)
                 trivia_sending_time = time.time()
