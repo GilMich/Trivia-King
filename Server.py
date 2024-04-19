@@ -308,6 +308,7 @@ def client_handler(client_socket, client_address):
         client_socket.close()
         print(f"Connection with {client_address} has been closed.")
 
+
 def monitor_clients():
     while True:
         time.sleep(10)
@@ -342,6 +343,10 @@ def remove_client(client_address):
                 print(f"Error closing socket for {client_address}: {e}")
         print(f"\033[31mRemoved\033[0m client {client_address} from active clients.")
 
+# def game_loop():
+#     threading.Thread(target=monitor_clients, daemon=True).start()
+#
+
 
 if __name__ == "__main__":
     threading.Thread(target=monitor_clients, daemon=True).start()
@@ -351,7 +356,7 @@ if __name__ == "__main__":
         server_port = find_free_port()
         print(f"Server started, listening on IP address: {get_local_ip()}")
         stop_event = threading.Event()
-        clients_dict = {}
+        # clients_dict = {}
 
         udp_thread = threading.Thread(target=udp_broadcast, args=(server_name, server_port, stop_event))
         tcp_thread = threading.Thread(target=tcp_listener, args=(server_port, stop_event))
@@ -377,10 +382,10 @@ if __name__ == "__main__":
                 winner_client_address = calculate_winner(correct_answer)
 
                 if not winner_client_address:
-                    print("No user wins this round.")
+                    print("No winners this time! Wasn't that a tricky question? Get ready, the next one might be your chance to shine!")
                 else:
-                    print(
-                        f"The winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
+                    winner_name = clients_dict[winner_client_address]['name']
+                    print(f"{winner_name} is correct! {winner_name} wins! with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
 
                 send_statistics_to_all_clients(clients_dict)  # Call after a round to update clients
                 # time.sleep(1)  # Adjust timing as needed
