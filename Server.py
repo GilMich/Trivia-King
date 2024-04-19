@@ -294,25 +294,6 @@ def send_statistics_to_all_clients(clients_dict):
                 info['currently_listening_to_client'] = False  # Mark client as inactive if sending fails
 
 
-
-
-# def main_game_loop(clients_dict):
-#     # Run the loop only if there are active clients
-#     if any(client['currently_listening_to_client'] for client in clients_dict.values()):
-#         welcome_message(server_name, trivia_topic, clients_dict)
-#         correct_answer = send_trivia_question()
-#         trivia_sending_time = time.time()
-#         get_all_answers(trivia_sending_time)
-#         winner_client_address = calculate_winner(correct_answer)
-#
-#         if not winner_client_address:
-#             print("No user wins this round.")
-#         else:
-#             print(f"The winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
-#         send_statistics_to_all_clients(clients_dict)  # Call after a round to update clients
-#
-#     # else:
-#     #     print("No active clients. Waiting for players...")
 def close_all_client_sockets():
     for client_info in clients_dict.values():
         client_socket = client_info['socket']

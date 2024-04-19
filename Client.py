@@ -217,6 +217,7 @@ def receive_message_from_server(server_tcp_socket):
 
 # Main client function
 if __name__ == "__main__":
+    server_tcp_socket = None
     while True:
         try:
             server_name, server_ip, server_port = looking_for_a_server()
@@ -228,6 +229,11 @@ if __name__ == "__main__":
             user_answer = get_answer_from_user()
             send_answer_to_server(server_tcp_socket, user_answer)
             receive_message_from_server(server_tcp_socket)
+
+        except KeyboardInterrupt:
+            print("Client is shutting down due to a keyboard interrupt.")
+            if server_tcp_socket:
+                server_tcp_socket.close()
 
         except Exception as e:
             print("Connection error:", e)
