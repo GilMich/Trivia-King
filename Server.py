@@ -5,6 +5,8 @@ import time
 import netifaces
 import random
 from tabulate import tabulate
+import json
+
 
 
 clients_dict = {}
@@ -14,6 +16,10 @@ clients_lock = threading.Lock()
 server_name = "Trivia King"
 trivia_topic = "The Olympics"
 active_players = 0
+
+def load_trivia_questions(file_path):
+    with open(file_path, 'r') as file:
+        return json.load(file)
 
 def handle_socket_error(exception, operation, function):
     """
@@ -163,10 +169,10 @@ def welcome_message(server_name, trivia_topic, clients_dict):
     print(message)
 
 
-def send_trivia_question():
-    random_trivia = random.choice(olympics_trivia_questions)
-    trivia_question = random_trivia[0]
-    trivia_answer = random_trivia[1]
+def send_trivia_question(questions):
+    random_question = random.choice(questions)
+    trivia_question = random_question['question']
+    trivia_answer = random_question['answer']
 
     message = "True or False: " + trivia_question
     for client in clients_dict.values():
@@ -231,30 +237,6 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
     else:
         return min_client_address
 
-
-olympics_trivia_questions = [
-    ("Has the United States ever hosted the Summer Olympics?", True),
-    ("Is the motto of the Olympics 'Faster, Higher, Stronger, Together'?", True),
-    ("Did the ancient Olympics originate in France?", False),
-    ("Are the Olympic rings colors black, green, red, yellow, and blue?", True),
-    ("Is golf an Olympic sport?", True),
-    ("Were the first modern Olympics held in 1896?", True),
-    ("Has every country in the world participated in the Olympics at least once?", False),
-    ("Are the Winter and Summer Olympics held in the same year?", False),
-    ("Did the original Olympic Games include women as participants?", False),
-    ("Is swimming a part of the Winter Olympics?", False),
-    ("Has Tokyo hosted the Summer Olympics more than once?", True),
-    ("Is the Olympic flame lit in Olympia, Greece, before each Games?", True),
-    ("Did Michael Phelps took the most gold medals in a single olympic in olympics history?", True),
-    ("Does the city hosting the Olympics also host the Paralympics shortly after?", True),
-    ("Was the marathon originally 26.2 miles when introduced to the Olympics?", False),
-    ("Do the Olympics take place every two years?", False),
-    ("Has a single country ever swept all medals in an Olympic event?", True),
-    ("Is figure skating a part of the Summer Olympics?", False),
-    ("Are Olympic gold medals made entirely of gold?", False),
-    ("Did the Olympic Games continue during World War II?", False)
-]
-
 def remove_client(client_address, clients_dict):
     if client_address in clients_dict:
         clients_dict[client_address]['currently_listening_to_client'] = False  # Mark the client as inactive instead of deleting
@@ -307,6 +289,7 @@ def close_all_client_sockets():
 
 if __name__ == "__main__":
     while True:
+        questions = load_trivia_questions("olympics_trivia_questions.json")
         server_port = find_free_port()
         print(f"Server started, listening on IP address: {get_local_ip()}")
         stop_event = threading.Event()
@@ -330,7 +313,7 @@ if __name__ == "__main__":
             if any(client['currently_listening_to_client'] for client in clients_dict.values()):
                 print("check")
                 welcome_message(server_name, trivia_topic, clients_dict)
-                correct_answer = send_trivia_question()
+                correct_answer = send_trivia_question(questions)
                 trivia_sending_time = time.time()
                 get_all_answers(trivia_sending_time)
                 winner_client_address = calculate_winner(correct_answer)
