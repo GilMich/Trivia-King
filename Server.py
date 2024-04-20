@@ -328,7 +328,7 @@ def client_handler(client_socket, client_address):
 
 def monitor_clients():
     while True:
-        time.sleep(5)
+        time.sleep(1)
         for client_address, client_info in list(clients_dict.items()):
             if not is_client_alive(client_info['socket']):
                 remove_client(client_address)
@@ -427,7 +427,7 @@ if __name__ == "__main__":
             trivia_sending_time = time.time()
             get_all_answers(trivia_sending_time)
             winner_client_address = calculate_winner(correct_answer)
-            # send_winner_message(winner_client_address)
+            send_winner_message(winner_client_address)
             send_statistics_to_all_clients(clients_dict)  # Call after a round to update clients
             time.sleep(1)  # Adjust timing as needed
             print("Round ends")

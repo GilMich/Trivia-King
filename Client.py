@@ -41,7 +41,6 @@ def handle_socket_error(exception, operation, function):
         print_red("An unexpected type of error occurred. Please consult system logs or network settings.")
 
 
-
 def unpack_packet(data):
     # Define the format string for unpacking the packet
     # '>'  stands for big-endian, meaning the first decoded part of the packet will be stored in the first variable basically meaning that encoding happens from left to right
@@ -96,7 +95,7 @@ def looking_for_a_server():
 def connect_to_server(server_ip, server_port):
     # Create a TCP/IP socket
     tcp_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
-    #try:
+    # try:
     # Connect the socket to the server's address and port
     tcp_socket.connect((server_ip, server_port))
     print(f"Successfully connected to the server at {server_ip}:{server_port}")
@@ -202,6 +201,7 @@ def send_answer_to_server(server_tcp_socket, user_answer):
         handle_socket_error(e, "sending answer", "send_answer_to_server")
         return False
 
+
 def print_message_from_server(server_tcp_socket):
     try:
         message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary
@@ -213,6 +213,8 @@ def print_message_from_server(server_tcp_socket):
     except sock.error as e:
         print(f"Error receiving message from server: {e}")
         return None
+
+
 
 # Main client function
 if __name__ == "__main__":
@@ -226,7 +228,8 @@ if __name__ == "__main__":
             print_trivia_question(server_tcp_socket)
             user_answer = get_answer_from_user()
             send_answer_to_server(server_tcp_socket, user_answer)
-            print_message_from_server(server_tcp_socket)
+            print_message_from_server(server_tcp_socket) # print winner message
+            print_message_from_server(server_tcp_socket) # print stats message
             server_tcp_socket.close()
             server_tcp_socket = None
         except KeyboardInterrupt:
