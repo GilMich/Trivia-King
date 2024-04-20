@@ -7,14 +7,12 @@ import random
 from tabulate import tabulate
 import json
 
-
 clients_dict = {}
 last_connection_time = 99999999999
 time_lock = threading.Lock()
 clients_lock = threading.Lock()
 server_name = "Trivia King"
 trivia_topic = "The Olympics"
-active_players = 0
 
 
 def load_trivia_questions(file_path):
@@ -142,7 +140,10 @@ def watch_for_inactivity(stop_event):
 
 def tcp_listener(server_port, stop_event):
     server_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
+    # Set SO_REUSEADDR to 1 to allow the immediate reuse of the port
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind(('', server_port))  # Bind to the specified port on all interfaces
+
     server_socket.listen()  # Listen for incoming connections
     server_socket.settimeout(10)  # timeout for accepting new requests
     print(f"Server is listening for TCP connections on port {server_port}")
@@ -174,14 +175,13 @@ def welcome_message(server_name, trivia_topic, clients_dict):
     print(message)
 
 
-def send_trivia_question(questions):
+def send_trivia_question(questions) -> bool:
     random_question = random.choice(questions)
     trivia_question = random_question['question']
     trivia_answer = random_question['answer']
 
     message = "True or False: " + trivia_question
     for client in clients_dict.values():
-        client["socket"].sendall(message.encode('utf-8'))
         try:
             client["socket"].sendall(message.encode('utf-8'))
         except Exception as e:
@@ -194,11 +194,12 @@ def get_answer_from_client(client_address, client_socket, trivia_sending_time):
     client_socket.settimeout(15)
     try:
         client_answer_encoded = client_socket.recv(1024)
+        # to-do check if client answer = "none"
         client_time_to_answer = round((time.time() - trivia_sending_time), 2)
     except Exception as e:
         handle_socket_error(e, "receiving data", "get_answer_from_client")
-        clients_dict[client_address]["client_answers"].append(0) # if the client didn't answer, put in 0 to mark that
-        clients_dict[client_address]["answers_times"].append(20) # Put a default high time to indicate no response
+        clients_dict[client_address]["client_answers"].append(0)  # if the client didn't answer, put in 0 to mark that
+        clients_dict[client_address]["answers_times"].append('didnt answer')  # Put a default high time to indicate no response
         return
     clients_dict[client_address]["answers_times"].append(client_time_to_answer)
     client_answer_decoded = client_answer_encoded.decode('utf-8')
@@ -217,7 +218,8 @@ def get_all_answers(trivia_sending_time: float):
     list_of_threads = []
     for client_address in clients_dict.keys():
         client_socket = clients_dict[client_address]["socket"]
-        thread = threading.Thread(target=get_answer_from_client, args=(client_address, client_socket, trivia_sending_time))
+        thread = threading.Thread(target=get_answer_from_client,
+                                  args=(client_address, client_socket, trivia_sending_time))
         thread.start()
         list_of_threads.append(thread)  # Store the thread reference in the list
 
@@ -235,6 +237,8 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
     for client_address in clients_dict.keys():
         client_answer = clients_dict[client_address]["client_answers"][-1]
         client_time = clients_dict[client_address]["answers_times"][-1]
+        if client_answer == 0:  # Skip clients who didn't answer
+            continue
         if client_answer == correct_answer and client_time < min_timestamp:
             min_client_address = client_address
             min_timestamp = client_time
@@ -242,6 +246,20 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
         return None
     else:
         return min_client_address
+
+
+def send_winner_message(winner_address):
+    if winner_address is None:
+        message = "No one answered correctly this time. Better luck next time!"
+    else:
+        winner_name = clients_dict[winner_address]["name"]
+        message = f"{winner_name} won! {winner_name} answered correctly first with a time of {clients_dict[winner_address]['answers_times'][-1]} seconds."
+    for client in clients_dict.values():
+        try:
+            client["socket"].sendall(message.encode('utf-8'))
+        except Exception as e:
+            handle_socket_error(e, "sendall", "send_winner_message")
+            continue
 
 
 # def remove_client(client_address, clients_dict):
@@ -293,6 +311,7 @@ def close_all_client_sockets():
                 print(f"Failed to close client socket: {e}")
     clients_dict.clear()
 
+
 # new code
 def client_handler(client_socket, client_address):
     try:
@@ -312,7 +331,7 @@ def client_handler(client_socket, client_address):
 
 def monitor_clients():
     while True:
-        time.sleep(5)
+        time.sleep(1)
         for client_address, client_info in list(clients_dict.items()):
             if not is_client_alive(client_info['socket']):
                 remove_client(client_address)
@@ -344,6 +363,31 @@ def remove_client(client_address):
                 print(f"Error closing socket for {client_address}: {e}")
         print(f"\033[31mRemoved\033[0m client {client_address} from active clients.")
 
+
+questions = [
+    {"question": "Has the United States ever hosted the Summer Olympics?", "answer": True},
+    {"question": "Is the motto of the Olympics 'Faster, Higher, Stronger, Together'?", "answer": True},
+    {"question": "Did the ancient Olympics originate in France?", "answer": False},
+    {"question": "Are the Olympic rings colors black, green, red, yellow, and blue?", "answer": True},
+    {"question": "Is golf an Olympic sport?", "answer": True},
+    {"question": "Were the first modern Olympics held in 1896?", "answer": True},
+    {"question": "Has every country in the world participated in the Olympics at least once?", "answer": False},
+    {"question": "Are the Winter and Summer Olympics held in the same year?", "answer": False},
+    {"question": "Did the original Olympic Games include women as participants?", "answer": False},
+    {"question": "Is swimming a part of the Winter Olympics?", "answer": False},
+    {"question": "Has Tokyo hosted the Summer Olympics more than once?", "answer": True},
+    {"question": "Is the Olympic flame lit in Olympia, Greece, before each Games?", "answer": True},
+    {"question": "Did Michael Phelps take the most gold medals in a single Olympics in Olympics history?",
+     "answer": True},
+    {"question": "Does the city hosting the Olympics also host the Paralympics shortly after?", "answer": True},
+    {"question": "Was the marathon originally 26.2 miles when introduced to the Olympics?", "answer": False},
+    {"question": "Do the Olympics take place every two years?", "answer": False},
+    {"question": "Has a single country ever swept all medals in an Olympic event?", "answer": True},
+    {"question": "Is figure skating a part of the Summer Olympics?", "answer": False},
+    {"question": "Are Olympic gold medals made entirely of gold?", "answer": False},
+    {"question": "Did the Olympic Games continue during World War II?", "answer": False}
+]
+
 # def game_loop():
 #     threading.Thread(target=monitor_clients, daemon=True).start()
 #
@@ -352,6 +396,7 @@ if __name__ == "__main__":
     threading.Thread(target=monitor_clients, daemon=True).start()
 
     while True:
+        last_connection_time = 99999999999
         questions = load_trivia_questions("olympics_trivia_questions.json")
         server_port = find_free_port()
         print(f"Server started, listening on IP address: {get_local_ip()}")
@@ -368,10 +413,8 @@ if __name__ == "__main__":
         try:
             # Wait for the stop_event to be set
             while not stop_event.is_set():
-                time.sleep(10)  # Reduced wait timeout for more responsive handling
+                time.sleep(5)  # Reduced wait timeout for more responsive handling
                 print("Server running...")
-
-                # stop_event.wait(timeout=10)  # wait to avoid busy waiting
 
             if not any(client['currently_listening_to_client'] for client in clients_dict.values()):
                 continue
@@ -379,35 +422,26 @@ if __name__ == "__main__":
             # if any(client['currently_listening_to_client'] for client in clients_dict.values()):
             # print("clients dict stat: ", clients_dict)
             print("Starting new game round...")
+            udp_thread.join()
+            tcp_thread.join()
 
             welcome_message(server_name, trivia_topic, clients_dict)
             correct_answer = send_trivia_question(questions)
+            time.sleep(2)  # Adjust timing as needed
             trivia_sending_time = time.time()
             get_all_answers(trivia_sending_time)
             winner_client_address = calculate_winner(correct_answer)
-
-            if not winner_client_address:
-                print("No winners this time! Wasn't that a tricky question? Get ready, the next one might be your chance to shine!")
-            else:
-                winner_name = clients_dict[winner_client_address]['name']
-                print(f"{winner_name} is correct! {winner_name} wins! with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
-
-                # print(
-                #     f"The winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
-
+            send_winner_message(winner_client_address)
             send_statistics_to_all_clients(clients_dict)  # Call after a round to update clients
-            # time.sleep(1)  # Adjust timing as needed
+            time.sleep(1)  # Adjust timing as needed
             print("Round ends")
             # continue
-
-            udp_thread.join()
-            tcp_thread.join()
 
             close_all_client_sockets()
             # clients_dict.clear()
             print("Server shutdown completed.")
             # Clearing and reinitializing for a new round
-            time.sleep(5)
+            time.sleep(2)
 
         except KeyboardInterrupt:
             print("Shutting down the server.")
