@@ -194,11 +194,12 @@ def get_answer_from_client(client_address, client_socket, trivia_sending_time):
     client_socket.settimeout(15)
     try:
         client_answer_encoded = client_socket.recv(1024)
+        # todo check if client answer = "none"
         client_time_to_answer = round((time.time() - trivia_sending_time), 2)
     except Exception as e:
         handle_socket_error(e, "receiving data", "get_answer_from_client")
         clients_dict[client_address]["client_answers"].append(0)  # if the client didn't answer, put in 0 to mark that
-        clients_dict[client_address]["answers_times"].append(20)  # Put a default high time to indicate no response
+        clients_dict[client_address]["answers_times"].append('didnt answer')  # Put a default high time to indicate no response
         return
     clients_dict[client_address]["answers_times"].append(client_time_to_answer)
     client_answer_decoded = client_answer_encoded.decode('utf-8')
@@ -236,6 +237,8 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
     for client_address in clients_dict.keys():
         client_answer = clients_dict[client_address]["client_answers"][-1]
         client_time = clients_dict[client_address]["answers_times"][-1]
+        if client_answer == 0:  # Skip clients who didn't answer
+            continue
         if client_answer == correct_answer and client_time < min_timestamp:
             min_client_address = client_address
             min_timestamp = client_time

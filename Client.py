@@ -167,17 +167,20 @@ def get_answer_from_user() -> bool | None:
     except queue.Empty:
         # If no input was received within 10 seconds, print a message
         print("No input received within 10 seconds.")
-        user_input = None
+        user_input = "None"
         # Set the stop event to stop the input thread
         stop_event.set()
-    if user_input is None:
-        return None
+    # if user_input is None:
+    #     return None
 
-    elif user_input in valid_true_keys:
+    if user_input in valid_true_keys:
         return True
 
     elif user_input in valid_false_keys:
         return False
+
+    else:
+        return None
 
 
 def send_answer_to_server(server_tcp_socket, user_answer):
