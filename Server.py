@@ -346,8 +346,7 @@ def remove_client(client_address):
 # def game_loop():
 #     threading.Thread(target=monitor_clients, daemon=True).start()
 #
-
-
+# check why its not working with stop_event.wait(timeout=10) instead of time.sleep(10)
 if __name__ == "__main__":
     threading.Thread(target=monitor_clients, daemon=True).start()
 
@@ -370,11 +369,14 @@ if __name__ == "__main__":
             while not stop_event.is_set():
                 time.sleep(10)  # Reduced wait timeout for more responsive handling
                 print("Server running...")
+
                 # stop_event.wait(timeout=10)  # wait to avoid busy waiting
 
 
             if any(client['currently_listening_to_client'] for client in clients_dict.values()):
-                print("clients dict stat: ", clients_dict)
+                # print("clients dict stat: ", clients_dict)
+                print("Starting new game round...")
+
                 welcome_message(server_name, trivia_topic, clients_dict)
                 correct_answer = send_trivia_question(questions)
                 trivia_sending_time = time.time()
@@ -386,6 +388,9 @@ if __name__ == "__main__":
                 else:
                     winner_name = clients_dict[winner_client_address]['name']
                     print(f"{winner_name} is correct! {winner_name} wins! with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
+
+                    # print(
+                    #     f"The winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
 
                 send_statistics_to_all_clients(clients_dict)  # Call after a round to update clients
                 # time.sleep(1)  # Adjust timing as needed
