@@ -1,0 +1,22 @@
+[
+    {"question": "Has the United States ever hosted the Summer Olympics?", "answer": true},
+    {"question": "Is the motto of the Olympics 'Faster, Higher, Stronger, Together'?", "answer": true},
+    {"question": "Did the ancient Olympics originate in France?", "answer": false},
+    {"question": "Are the Olympic rings colors black, green, red, yellow, and blue?", "answer": true},
+    {"question": "Is golf an Olympic sport?", "answer": true},
+    {"question": "Were the first modern Olympics held in 1896?", "answer": true},
+    {"question": "Has every country in the world participated in the Olympics at least once?", "answer": false},
+    {"question": "Are the Winter and Summer Olympics held in the same year?", "answer": false},
+    {"question": "Did the original Olympic Games include women as participants?", "answer": false},
+    {"question": "Is swimming a part of the Winter Olympics?", "answer": false},
+    {"question": "Has Tokyo hosted the Summer Olympics more than once?", "answer": true},
+    {"question": "Is the Olympic flame lit in Olympia, Greece, before each Games?", "answer": true},
+    {"question": "Did Michael Phelps take the most gold medals in a single Olympics in Olympics history?", "answer": true},
+    {"question": "Does the city hosting the Olympics also host the Paralympics shortly after?", "answer": true},
+    {"question": "Was the marathon originally 26.2 miles when introduced to the Olympics?", "answer": false},
+    {"question": "Do the Olympics take place every two years?", "answer": false},
+    {"question": "Has a single country ever swept all medals in an Olympic event?", "answer": true},
+    {"question": "Is figure skating a part of the Summer Olympics?", "answer": false},
+    {"question": "Are Olympic gold medals made entirely of gold?", "answer": false},
+    {"question": "Did the Olympic Games continue during World War II?", "answer": false}
+]

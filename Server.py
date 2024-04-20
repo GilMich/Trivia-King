@@ -181,6 +181,7 @@ def send_trivia_question(questions):
 
     message = "True or False: " + trivia_question
     for client in clients_dict.values():
+        client["socket"].sendall(message.encode('utf-8'))
         try:
             client["socket"].sendall(message.encode('utf-8'))
         except Exception as e:
@@ -311,7 +312,7 @@ def client_handler(client_socket, client_address):
 
 def monitor_clients():
     while True:
-        time.sleep(10)
+        time.sleep(5)
         for client_address, client_info in list(clients_dict.items()):
             if not is_client_alive(client_info['socket']):
                 remove_client(client_address)
@@ -372,30 +373,32 @@ if __name__ == "__main__":
 
                 # stop_event.wait(timeout=10)  # wait to avoid busy waiting
 
-
-            if any(client['currently_listening_to_client'] for client in clients_dict.values()):
-                # print("clients dict stat: ", clients_dict)
-                print("Starting new game round...")
-
-                welcome_message(server_name, trivia_topic, clients_dict)
-                correct_answer = send_trivia_question(questions)
-                trivia_sending_time = time.time()
-                get_all_answers(trivia_sending_time)
-                winner_client_address = calculate_winner(correct_answer)
-
-                if not winner_client_address:
-                    print("No winners this time! Wasn't that a tricky question? Get ready, the next one might be your chance to shine!")
-                else:
-                    winner_name = clients_dict[winner_client_address]['name']
-                    print(f"{winner_name} is correct! {winner_name} wins! with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
-
-                    # print(
-                    #     f"The winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
-
-                send_statistics_to_all_clients(clients_dict)  # Call after a round to update clients
-                # time.sleep(1)  # Adjust timing as needed
-                print("Round ends")
+            if not any(client['currently_listening_to_client'] for client in clients_dict.values()):
                 continue
+
+            # if any(client['currently_listening_to_client'] for client in clients_dict.values()):
+            # print("clients dict stat: ", clients_dict)
+            print("Starting new game round...")
+
+            welcome_message(server_name, trivia_topic, clients_dict)
+            correct_answer = send_trivia_question(questions)
+            trivia_sending_time = time.time()
+            get_all_answers(trivia_sending_time)
+            winner_client_address = calculate_winner(correct_answer)
+
+            if not winner_client_address:
+                print("No winners this time! Wasn't that a tricky question? Get ready, the next one might be your chance to shine!")
+            else:
+                winner_name = clients_dict[winner_client_address]['name']
+                print(f"{winner_name} is correct! {winner_name} wins! with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
+
+                # print(
+                #     f"The winner is {clients_dict[winner_client_address]['name']} with a time of {clients_dict[winner_client_address]['answers_times'][-1]} seconds")
+
+            send_statistics_to_all_clients(clients_dict)  # Call after a round to update clients
+            # time.sleep(1)  # Adjust timing as needed
+            print("Round ends")
+            # continue
 
             udp_thread.join()
             tcp_thread.join()
