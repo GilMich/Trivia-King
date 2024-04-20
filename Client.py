@@ -94,24 +94,24 @@ def looking_for_a_server():
 
 
 def connect_to_server(server_ip, server_port):
-    try:
-        # Create a TCP/IP socket
-        tcp_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
-        # Connect the socket to the server's address and port
-        tcp_socket.connect((server_ip, server_port))
-        print(f"Successfully connected to the server at {server_ip}:{server_port}")
+    # Create a TCP/IP socket
+    tcp_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
+    #try:
+    # Connect the socket to the server's address and port
+    tcp_socket.connect((server_ip, server_port))
+    print(f"Successfully connected to the server at {server_ip}:{server_port}")
 
-        # Immediately sends the player name after the connection is established
-        player_name = input("Please enter your name: ")
-        name_message = f"{player_name}\n"
-        tcp_socket.sendall(name_message.encode())
-        return tcp_socket
+    # Immediately sends the player name after the connection is established
+    player_name = input("Please enter your name: ")
+    name_message = f"{player_name}\n"
+    tcp_socket.sendall(name_message.encode())
+    return tcp_socket
 
-    except sock.error as e:
-        handle_socket_error(e, "connect to server", "connect_to_server")
-        if tcp_socket:
-            tcp_socket.close()  # Ensure the socket is closed if an error occurs
-        return None
+    # except sock.error as e:
+    #     handle_socket_error(e, "connect to server", "connect_to_server")
+    #     if tcp_socket:
+    #         tcp_socket.close()  # Ensure the socket is closed if an error occurs
+    #     return None
 
 
 def print_welcome_message(server_tcp_socket):
@@ -202,7 +202,7 @@ def send_answer_to_server(server_tcp_socket, user_answer):
         handle_socket_error(e, "sending answer", "send_answer_to_server")
         return False
 
-def receive_message_from_server(server_tcp_socket):
+def print_message_from_server(server_tcp_socket):
     try:
         message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary
         if not message_encoded:
@@ -210,7 +210,6 @@ def receive_message_from_server(server_tcp_socket):
             return None
         message = message_encoded.decode('utf-8')
         print(message)
-        return message
     except sock.error as e:
         print(f"Error receiving message from server: {e}")
         return None
@@ -225,11 +224,11 @@ if __name__ == "__main__":
 
             print_welcome_message(server_tcp_socket)
             print_trivia_question(server_tcp_socket)
-
             user_answer = get_answer_from_user()
             send_answer_to_server(server_tcp_socket, user_answer)
-            receive_message_from_server(server_tcp_socket)
-
+            print_message_from_server(server_tcp_socket)
+            server_tcp_socket.close()
+            server_tcp_socket = None
         except KeyboardInterrupt:
             print("Client is shutting down due to a keyboard interrupt.")
             if server_tcp_socket:
