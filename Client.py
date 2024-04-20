@@ -41,7 +41,6 @@ def handle_socket_error(exception, operation, function):
         print_red("An unexpected type of error occurred. Please consult system logs or network settings.")
 
 
-
 def unpack_packet(data):
     # Define the format string for unpacking the packet
     # '>'  stands for big-endian, meaning the first decoded part of the packet will be stored in the first variable basically meaning that encoding happens from left to right
@@ -94,24 +93,24 @@ def looking_for_a_server():
 
 
 def connect_to_server(server_ip, server_port):
-    try:
-        # Create a TCP/IP socket
-        tcp_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
-        # Connect the socket to the server's address and port
-        tcp_socket.connect((server_ip, server_port))
-        print(f"Successfully connected to the server at {server_ip}:{server_port}")
+    # Create a TCP/IP socket
+    tcp_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
+    # try:
+    # Connect the socket to the server's address and port
+    tcp_socket.connect((server_ip, server_port))
+    print(f"Successfully connected to the server at {server_ip}:{server_port}")
 
-        # Immediately sends the player name after the connection is established
-        player_name = input("Please enter your name: ")
-        name_message = f"{player_name}\n"
-        tcp_socket.sendall(name_message.encode())
-        return tcp_socket
+    # Immediately sends the player name after the connection is established
+    player_name = input("Please enter your name: ")
+    name_message = f"{player_name}\n"
+    tcp_socket.sendall(name_message.encode())
+    return tcp_socket
 
-    except sock.error as e:
-        handle_socket_error(e, "connect to server", "connect_to_server")
-        if tcp_socket:
-            tcp_socket.close()  # Ensure the socket is closed if an error occurs
-        return None
+    # except sock.error as e:
+    #     handle_socket_error(e, "connect to server", "connect_to_server")
+    #     if tcp_socket:
+    #         tcp_socket.close()  # Ensure the socket is closed if an error occurs
+    #     return None
 
 
 def print_welcome_message(server_tcp_socket):
@@ -168,17 +167,20 @@ def get_answer_from_user() -> bool | None:
     except queue.Empty:
         # If no input was received within 10 seconds, print a message
         print("No input received within 10 seconds.")
-        user_input = None
+        user_input = "None"
         # Set the stop event to stop the input thread
         stop_event.set()
-    if user_input is None:
-        return None
+    # if user_input is None:
+    #     return None
 
-    elif user_input in valid_true_keys:
+    if user_input in valid_true_keys:
         return True
 
     elif user_input in valid_false_keys:
         return False
+
+    else:
+        return None
 
 
 def send_answer_to_server(server_tcp_socket, user_answer):
@@ -202,7 +204,8 @@ def send_answer_to_server(server_tcp_socket, user_answer):
         handle_socket_error(e, "sending answer", "send_answer_to_server")
         return False
 
-def receive_message_from_server(server_tcp_socket):
+
+def print_message_from_server(server_tcp_socket):
     try:
         message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary
         if not message_encoded:
@@ -210,10 +213,11 @@ def receive_message_from_server(server_tcp_socket):
             return None
         message = message_encoded.decode('utf-8')
         print(message)
-        return message
     except sock.error as e:
         print(f"Error receiving message from server: {e}")
         return None
+
+
 
 # Main client function
 if __name__ == "__main__":
@@ -221,25 +225,31 @@ if __name__ == "__main__":
     while True:
         try:
             server_name, server_ip, server_port = looking_for_a_server()
-            server_tcp_socket = connect_to_server(server_ip, server_port)
+            if server_name:
+                server_tcp_socket = connect_to_server(server_ip, server_port)
+                if server_tcp_socket:
+                    if not print_welcome_message(server_tcp_socket):
+                        raise Exception("Failed to receive welcome message.")
+                    if not print_trivia_question(server_tcp_socket):
+                        raise Exception("Failed to receive trivia question.")
+                    user_answer = get_answer_from_user()
+                    if not send_answer_to_server(server_tcp_socket, user_answer):
+                        raise Exception("Failed to send answer.")
 
-            print_welcome_message(server_tcp_socket)
-            print_trivia_question(server_tcp_socket)
-
-            user_answer = get_answer_from_user()
-            send_answer_to_server(server_tcp_socket, user_answer)
-            receive_message_from_server(server_tcp_socket)
-
+                    print_message_from_server(server_tcp_socket) # print winner message
+                    print_message_from_server(server_tcp_socket) # print stats message
+                    # server_tcp_socket.close()
+                    # server_tcp_socket = None
         except KeyboardInterrupt:
             print("Client is shutting down due to a keyboard interrupt.")
-            if server_tcp_socket:
-                server_tcp_socket.close()
 
         except Exception as e:
             print("Connection error:", e)
+
+        finally:
             if server_tcp_socket:
                 server_tcp_socket.close()
-            server_tcp_socket = None
+                print("Disconnected from the server.")
         # time.sleep(5)  # Adjust timing as needed
 
         # if not print_welcome_message(server_tcp_socket) or not print_trivia_question(server_tcp_socket):
