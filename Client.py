@@ -212,10 +212,10 @@ def print_results_from_server(server_tcp_socket):
     try:
         winner_message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary
         winner_message = winner_message_encoded.decode('utf-8')
-        print(winner_message)
+        print(winner_message + "\n")
         stats_message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary
         stats_message = stats_message_encoded.decode('utf-8')
-        print(stats_message)
+        print(stats_message + "\n")
     except OSError as e:
         raise OSError(f"Error {type(e)} occurred while receiving game results from server: {e}") from e
 
@@ -251,4 +251,5 @@ if __name__ == "__main__":
             if server_tcp_socket:
                 server_tcp_socket.close()
                 print("Disconnected from the server.")
+                server_tcp_socket = None
             time.sleep(2)  # Wait before trying to connect again
