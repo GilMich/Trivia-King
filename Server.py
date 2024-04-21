@@ -164,6 +164,9 @@ def tcp_listener(server_port, stop_event):
 
 
 def welcome_message(server_name, trivia_topic, clients_dict):
+    if len(clients_dict) == 0:
+        print("No clients connected to the server.")
+        return -1
     message = f"Welcome to the {server_name} server, where we are be answering trivia questions about {trivia_topic}.\n"
     # It's a good practice to list keys to avoid RuntimeError for changing dict size during iteration
     for client_tuple in enumerate(list(clients_dict.keys()), start=1):
@@ -201,7 +204,6 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
                 raise ValueError("No data received; client may have disconnected")
             client_time_to_answer = round((time.time() - trivia_sending_time), 2)
             break
-
         except socket.timeout:
             print("Socket timed out while waiting for client response")
             clients_dict[client_address]["client_answers"].append(-1)  # if the client didn't answer, mark with -1
@@ -254,7 +256,7 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
     for client_address in clients_dict.keys():
         client_answer = clients_dict[client_address]["client_answers"][-1]
         client_time = clients_dict[client_address]["answers_times"][-1]
-        if isinstance(client_answer,str):  # Skip clients who didn't answer
+        if client_answer < 0:  # Skip clients who didn't answer
             continue
         if client_answer == correct_answer and client_time < min_timestamp:
             min_client_address = client_address
@@ -358,22 +360,19 @@ def monitor_clients():
                 remove_client(client_address)
 
 
-def is_client_alive(sock):
+def is_client_alive(sock) -> bool:
     try:
         # this is a non-blocking call
         sock.setblocking(0)
         data = sock.recv(16)
-        if not data:
-            sock.setblocking(1)
-            return False
         sock.setblocking(1)
+        if not data:
+            return False
         return True
     except BlockingIOError:
-        sock.setblocking(1)
         return True  # No data, but still connected
 
     except Exception:
-        sock.setblocking(1)
         return False
 
 
@@ -418,7 +417,7 @@ questions = [
 #
 # check why its not working with stop_event.wait(timeout=10) instead of time.sleep(10)
 if __name__ == "__main__":
-    # threading.Thread(target=monitor_clients, daemon=True).start()
+    threading.Thread(target=monitor_clients, daemon=True).start()
 
     while True:
         last_connection_time = 99999999999
@@ -449,7 +448,9 @@ if __name__ == "__main__":
             udp_thread.join()
             tcp_thread.join()
 
-            welcome_message(server_name, trivia_topic, clients_dict)
+            return_value_welcome = welcome_message(server_name, trivia_topic, clients_dict)
+            if return_value_welcome == -1:
+                continue
             correct_answer = send_trivia_question(questions)
             time.sleep(1)  # Adjust timing as needed
             trivia_sending_time = time.time()
