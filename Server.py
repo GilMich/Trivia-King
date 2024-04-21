@@ -120,12 +120,18 @@ def get_default_broadcast():
         handle_socket_error(e, "get_default_broadcast")
 
 
-# Finds an available tcp port for the server to send to the client in the UDP broadcast message,
-# on which the server will listen on, and the client will connect to.
+# ------------- CHECKED ----------------
 def find_free_port():
-    with sock.socket(sock.AF_INET, sock.SOCK_STREAM) as s:
-        s.bind(('', 0))  # Binding to port 0 tells the OS to pick an available port
-        return s.getsockname()[1]  # Return the port number assigned by the OS
+    """
+    Finds and returns an available network port on the local machine by asking the OS to assign a free port.
+
+    Returns:
+        int: A free port number assigned by the operating system.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as temp_socket:
+        temp_socket.bind(('', 0))  # Binding to port 0 lets the OS choose a free port
+        assigned_port = temp_socket.getsockname()[1]  # Retrieve the port number assigned by the OS
+        return assigned_port
 
 
 def udp_broadcast(server_name, server_port, stop_event):
