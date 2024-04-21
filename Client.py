@@ -139,13 +139,22 @@ def print_trivia_question(server_tcp_socket):
 
 def get_input(input_queue, valid_keys, stop_event):
     while not stop_event.is_set():
-        user_input = input(
-            "enter [1, t, y] for True, [0, f, n] for False:")  # user can screw up the program here if he doesn't hit enter the thread will stay alive forever
-        if user_input in valid_keys:
-            input_queue.put(user_input)
+        try:
+            user_input = input("Enter [1, t, y] for True, [0, f, n] for False: ")
+            if user_input in valid_keys:
+                input_queue.put(user_input)
+                break
+            else:
+                print("Invalid input. Please try again.")
+        except UnicodeDecodeError as ude:
+            print(f"Unicode decode error during user input: {ude}")
+            stop_event.set()  # Signal to end this thread due to input issues
             break
-        else:
-            print("Invalid input. Please try again.")
+        except Exception as e:
+            print(f"General error during user input: {e}")
+            stop_event.set()  # Signal to end this thread for any other issues
+            break
+
 
 
 def get_answer_from_user() -> bool | None:
@@ -153,32 +162,23 @@ def get_answer_from_user() -> bool | None:
     valid_false_keys = ["0", "f", 'F', 'n', 'N']
     valid_keys = valid_true_keys + valid_false_keys
     stop_event = threading.Event()
-    # Function to get input from the user and put it in a queue in a separate thread
 
-    # Create a queue
     input_queue = queue.Queue()
-
-    # Start the thread
     input_thread = threading.Thread(target=get_input, args=(input_queue, valid_keys, stop_event))
     input_thread.start()
+
     try:
-        # Try to get input within 10 seconds
-        user_input = input_queue.get(block=True, timeout=20)
+        user_input = input_queue.get(block=True, timeout=10)  # Reduced timeout to test quicker
     except queue.Empty:
-        # If no input was received within 10 seconds, print a message
-        print("No input received within 10 seconds.")
-        user_input = "None"
-        # Set the stop event to stop the input thread
-        stop_event.set()
-    # if user_input is None:
-    #     return None
+        print("No input received within the time limit.")
+        stop_event.set()  # Ensure we signal the thread to stop if it hasn't already
+        input_thread.join()  # Wait for the thread to finish
+        return None
 
     if user_input in valid_true_keys:
         return True
-
     elif user_input in valid_false_keys:
         return False
-
     else:
         return None
 
@@ -225,31 +225,35 @@ if __name__ == "__main__":
     while True:
         try:
             server_name, server_ip, server_port = looking_for_a_server()
-            if server_name:
-                server_tcp_socket = connect_to_server(server_ip, server_port)
-                if server_tcp_socket:
-                    if not print_welcome_message(server_tcp_socket):
-                        raise Exception("Failed to receive welcome message.")
-                    if not print_trivia_question(server_tcp_socket):
-                        raise Exception("Failed to receive trivia question.")
-                    user_answer = get_answer_from_user()
-                    if not send_answer_to_server(server_tcp_socket, user_answer):
-                        raise Exception("Failed to send answer.")
+            if not server_name:
+                continue
 
-                    print_message_from_server(server_tcp_socket) # print winner message
-                    print_message_from_server(server_tcp_socket) # print stats message
-                    # server_tcp_socket.close()
-                    # server_tcp_socket = None
+            server_tcp_socket = connect_to_server(server_ip, server_port)
+            if not server_tcp_socket:
+                continue
+
+            if not print_welcome_message(server_tcp_socket):
+                raise Exception("Failed to receive welcome message.")
+            if not print_trivia_question(server_tcp_socket):
+                raise Exception("Failed to receive trivia question.")
+
+            user_answer = get_answer_from_user()
+            if user_answer is not None and not send_answer_to_server(server_tcp_socket, user_answer):
+                raise Exception("Failed to send answer.")
+
+            print_message_from_server(server_tcp_socket)  # Winner message
+            print_message_from_server(server_tcp_socket)  # Stats message
+
         except KeyboardInterrupt:
             print("Client is shutting down due to a keyboard interrupt.")
-
+            break
         except Exception as e:
-            print("Connection error:", e)
-
+            print("Error:", e)
         finally:
             if server_tcp_socket:
                 server_tcp_socket.close()
                 print("Disconnected from the server.")
+            time.sleep(5)  # Wait before trying to connect again
         # time.sleep(5)  # Adjust timing as needed
 
         # if not print_welcome_message(server_tcp_socket) or not print_trivia_question(server_tcp_socket):

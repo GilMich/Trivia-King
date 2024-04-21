@@ -199,7 +199,7 @@ def get_answer_from_client(client_address, client_socket, trivia_sending_time):
     except Exception as e:
         handle_socket_error(e, "receiving data", "get_answer_from_client")
         clients_dict[client_address]["client_answers"].append(0)  # if the client didn't answer, put in 0 to mark that
-        clients_dict[client_address]["answers_times"].append('didnt answer')  # Put a default high time to indicate no response
+        clients_dict[client_address]["answers_times"].append(0)  # Put a default high time to indicate no response
         return
     clients_dict[client_address]["answers_times"].append(client_time_to_answer)
     client_answer_decoded = client_answer_encoded.decode('utf-8')
