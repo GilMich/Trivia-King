@@ -140,7 +140,7 @@ def print_trivia_question(server_tcp_socket):
 def get_input(input_queue, valid_keys, stop_event):
     while not stop_event.is_set():
         try:
-            user_input = input("Enter [1, t, y] for True, [0, f, n] for False: ")
+            user_input = input("Enter your response: ")
             if user_input in valid_keys:
                 input_queue.put(user_input)
                 break
