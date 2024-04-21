@@ -197,31 +197,29 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
     client_socket.settimeout(15)
     global clients_dict
     global clients_lock
-    while True:
-        try:
-            client_answer_encoded = client_socket.recv(1024)
-            if not client_answer_encoded:
-                raise ValueError("No data received; client may have disconnected")
-            client_time_to_answer = round((time.time() - trivia_sending_time), 2)
-            break
-        except socket.timeout:
-            print("Socket timed out while waiting for client response")
-            clients_dict[client_address]["client_answers"].append(-1)  # if the client didn't answer, mark with -1
-            clients_dict[client_address]["answers_times"].append(0)  # Put a default 0 to indicate no response
-            return
-        except BlockingIOError:
-            print("BlockingIOError occurred while waiting for client response")
-            clients_dict[client_address]["client_answers"].append(-1)
-            clients_dict[client_address]["answers_times"].append(0)
-            return
-        except socket.error as e:
-            handle_socket_error(e, "receiving data", "get_answer_from_client")
-            clients_dict[client_address]["client_answers"].append(-1)
-            clients_dict[client_address]["answers_times"].append(0)
-            return
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            return
+    try:
+        client_answer_encoded = client_socket.recv(1024)
+        if not client_answer_encoded:
+            raise ValueError("No data received; client may have disconnected")
+        client_time_to_answer = round((time.time() - trivia_sending_time), 2)
+    except socket.timeout:
+        print("Socket timed out while waiting for client response")
+        clients_dict[client_address]["client_answers"].append(-1)  # if the client didn't answer, mark with -1
+        clients_dict[client_address]["answers_times"].append(0)  # Put a default 0 to indicate no response
+        return
+    except BlockingIOError:
+        print("BlockingIOError occurred while waiting for client response")
+        clients_dict[client_address]["client_answers"].append(-1)
+        clients_dict[client_address]["answers_times"].append(0)
+        return
+    except socket.error as e:
+        handle_socket_error(e, "receiving data", "get_answer_from_client")
+        clients_dict[client_address]["client_answers"].append(-1)
+        clients_dict[client_address]["answers_times"].append(0)
+        return
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return
 
     clients_dict[client_address]["answers_times"].append(client_time_to_answer)
     client_answer_decoded = client_answer_encoded.decode('utf-8').strip().lower()
@@ -231,6 +229,7 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
     elif "false" in client_answer_decoded:
         clients_dict[client_address]["client_answers"].append(0)
     else:
+        clients_dict[client_address]["client_answers"].append(-1)
         print(f"Invalid answer received:", {client_answer_decoded})
 
 def get_all_answers(trivia_sending_time: float):
