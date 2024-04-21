@@ -163,11 +163,11 @@ def get_answer_from_user() -> bool | None:
     input_thread.start()
     try:
         # Try to get input within 10 seconds
-        user_input = input_queue.get(block=True, timeout=20)
+        user_input = input_queue.get(block=True, timeout=10)
     except queue.Empty:
         # If no input was received within 10 seconds, print a message
         print("No input received within 10 seconds.")
-        user_input = "None"
+        user_input = "none"
         # Set the stop event to stop the input thread
         stop_event.set()
     # if user_input is None:
@@ -239,6 +239,8 @@ if __name__ == "__main__":
             print("Client is shutting down due to a keyboard interrupt.")
             if server_tcp_socket:
                 server_tcp_socket.close()
+            server_tcp_socket = None
+
 
         except Exception as e:
             print("Connection error:", e)
