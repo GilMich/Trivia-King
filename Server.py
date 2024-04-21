@@ -269,18 +269,31 @@ def welcome_message(server_name, trivia_topic):
     print(message)
 
 
+# ------------- CHECKED ----------------
 def send_trivia_question(questions) -> bool:
+    """
+    Sends a randomly selected trivia question to all connected clients.
+
+    Args:
+        questions (list): A list of dictionaries, each containing a 'question' and its 'answer'.
+
+    Returns:
+        bool: The correct answer to the randomly selected trivia question (True or False).
+    """
     random_question = random.choice(questions)
     trivia_question = random_question['question']
     trivia_answer = random_question['answer']
 
-    message = "True or False: " + trivia_question
+    # Construct the message to send
+    message = f"True or False: {trivia_question}"
+
+    # Send the question to each connected client and handle potential errors
     for client in clients_dict.values():
         try:
             client["socket"].sendall(message.encode('utf-8'))
         except Exception as e:
+            # Log the error and continue to attempt to send to other clients
             handle_socket_error(e,  "sending_trivia_question")
-            continue
     return trivia_answer
 
 
