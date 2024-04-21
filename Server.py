@@ -14,6 +14,7 @@ clients_lock = threading.Lock()
 server_name = "Trivia King"
 trivia_topic = "The Olympics"
 
+
 # ------------- CHECKED ----------------
 def load_trivia_questions(file_path):
     """
@@ -40,7 +41,7 @@ def load_trivia_questions(file_path):
     return questions
 
 
-def handle_socket_error(exception, operation, function):
+def handle_socket_error(exception, function):
     """
     Handles exceptions raised during socket operations.
 
@@ -54,7 +55,7 @@ def handle_socket_error(exception, operation, function):
     error_type = type(exception).__name__
     error_message = str(exception)
 
-    print(f"Error occurred in function '{function}' during {operation}.")
+    print(f"Error occurred in function '{function}'")
     print(f"Error Type: {error_type}")
     print(f"Error Details: {error_message}")
 
@@ -70,38 +71,53 @@ def handle_socket_error(exception, operation, function):
         print("An unexpected type of error occurred. Please consult system logs or network settings.")
 
 
-def socket_error_info(exception, function, details):
-    error_type = type(exception).__name__
-    error_message = str(exception)
+# def socket_error_info(exception, function, details):
+#     error_type = type(exception).__name__
+#     error_message = str(exception)
+#
+#     error_message = f"Error {error_type} occurred: {error_message} in the function: {function}. Additional details: {details}"
+#     return error_message
 
-    error_message = f"Error {error_type} occurred: {error_message} in the function: {function}. Additional details: {details}"
-    return error_message
 
-
+# ------------- CHECKED ----------------
 def get_local_ip():
     """
-    Retrieves the local IP address of the machine.
+    Retrieves the local IP address of the machine by creating a dummy UDP connection.
+    This does not actually establish a connection but is used to determine the IP address
+    that would be used to reach a specific remote address.
+
+    Returns:
+        str: The local IP address.
     """
-    s = sock.socket(sock.AF_INET, sock.SOCK_DGRAM)
-    s.connect(('10.255.255.255', 1))  # dummy connect
-    ip = s.getsockname()[0]
+    with sock.socket(sock.AF_INET, sock.SOCK_DGRAM) as s:
+        s.connect(('10.255.255.255', 1))  # dummy connect
+        ip = s.getsockname()[0]
     return ip
 
 
+# ------------- CHECKED ----------------
 def get_default_broadcast():
-    # Get the default gateway interface
-    gws = netifaces.gateways()
-    default_gateway = gws['default'][netifaces.AF_INET][1]
-    # Get the addresses associated with the default interface
-    addrs = netifaces.ifaddresses(default_gateway)
-    # Get the IPv4 addresses
-    ipv4_addrs = addrs[netifaces.AF_INET]
-    # Get the first IPv4 address
-    first_ipv4_addr = ipv4_addrs[0]
-    # Get the broadcast address from the first IPv4 address info
-    broadcast = first_ipv4_addr['broadcast']
+    """
+    Retrieves the default broadcast address for the default network interface.
 
-    return broadcast
+    Returns:
+        str: The broadcast address of the default network interface.
+
+    Raises:
+        ValueError: If no default gateway or broadcast address is found.
+    """
+    try:
+        # Retrieve the default gateway details for IPv4 connections
+        default_gateway_interface = netifaces.gateways()['default'][netifaces.AF_INET][1]
+        # Retrieve IPv4 addresses for the default gateway interface
+        ipv4_addresses = netifaces.ifaddresses(default_gateway_interface)[netifaces.AF_INET]
+        broadcast_address = ipv4_addresses[0]['broadcast']
+        return broadcast_address
+
+    except KeyError as e:
+        # Convert KeyError to a more understandable ValueError
+        e = ValueError(f"Failed to retrieve necessary network interface details: {e}")
+        handle_socket_error(e, "get_default_broadcast")
 
 
 # Finds an available tcp port for the server to send to the client in the UDP broadcast message,
@@ -154,7 +170,7 @@ def save_client_info(client_socket, client_address):
             received_data = client_socket.recv(1024)  # Adjust buffer size as needed
             if not received_data:
                 e = ValueError("No data received from client.")
-                handle_socket_error(e, "receiving data", "save_client_info")
+                handle_socket_error(e, "save_client_info")
 
             client_name = received_data.decode('utf-8').rstrip('\n')
             clients_dict[client_address] = {
@@ -166,7 +182,7 @@ def save_client_info(client_socket, client_address):
             }
             last_connection_time = time.time()
         except Exception as e:
-            handle_socket_error(e, "receiving or processing data", "save_client_info")
+            handle_socket_error(e, "save_client_info")
 
 
 def watch_for_inactivity(stop_event, timeout=10):
@@ -212,7 +228,7 @@ def tcp_listener(server_port, stop_event):
             if isinstance(e, sock.timeout):
                 continue
             else:
-                handle_socket_error(e, "accepting new connections", "tcp_listening")
+                handle_socket_error(e, "tcp_listening")
         continue  # if a client already connected while waiting for another one, the stop event will be true here. if nobody connected we will just keep waiting
 
 
@@ -241,7 +257,7 @@ def send_trivia_question(questions) -> bool:
         try:
             client["socket"].sendall(message.encode('utf-8'))
         except Exception as e:
-            handle_socket_error(e, "sendall", "sending_trivia_question")
+            handle_socket_error(e,  "sending_trivia_question")
             continue
     return trivia_answer
 
@@ -268,7 +284,7 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
             clients_dict[client_address]["answers_times"].append(0)
             return
         except socket.error as e:
-            handle_socket_error(e, "receiving data", "get_answer_from_client")
+            handle_socket_error(e, "get_answer_from_client")
             clients_dict[client_address]["client_answers"].append(-1)
             clients_dict[client_address]["answers_times"].append(0)
             return
@@ -330,7 +346,7 @@ def send_winner_message(winner_address):
         try:
             client["socket"].sendall(message.encode('utf-8'))
         except Exception as e:
-            handle_socket_error(e, "sendall", "send_winner_message")
+            handle_socket_error(e, "send_winner_message")
             continue
 
 
@@ -374,7 +390,7 @@ def send_statistics_to_all_clients(correct_answer):
                 info['socket'].sendall(stats_message_encoded)
             except Exception as e:
                 info['is_client_active'] = False
-                handle_socket_error(e, "sendall", "send_statistics")
+                handle_socket_error(e, "send_statistics")
 
 
 def close_all_client_sockets():
@@ -451,7 +467,7 @@ if __name__ == "__main__":
     while True:
         last_connection_time = 99999999999
         try:
-            questions = load_trivia_questions("o1lympics_trivia_questions.json")
+            questions = load_trivia_questions("olympics_trivia_questions.json")
         except Exception as e:
             print(f"Failed to load questions: {e}")
             break
