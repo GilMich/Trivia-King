@@ -118,7 +118,7 @@ def save_client_info(client_socket, client_address):
         client_name = received_data.decode('utf-8').rstrip('\n')
         clients_dict[client_address] = {"name": client_name,
                                         "socket": client_socket,
-                                        "currently_listening_to_client": True,
+                                        "is_client_active": True,
                                         "client_answers": [],
                                         "answers_times": []}
         last_connection_time = time.time()
@@ -164,6 +164,9 @@ def tcp_listener(server_port, stop_event):
 
 
 def welcome_message(server_name, trivia_topic, clients_dict):
+    if len(clients_dict) == 0:
+        print("No clients connected to the server.")
+        return -1
     message = f"Welcome to the {server_name} server, where we are be answering trivia questions about {trivia_topic}.\n"
     # It's a good practice to list keys to avoid RuntimeError for changing dict size during iteration
     for client_tuple in enumerate(list(clients_dict.keys()), start=1):
@@ -190,42 +193,58 @@ def send_trivia_question(questions) -> bool:
     return trivia_answer
 
 
-def get_answer_from_client(client_address, client_socket, trivia_sending_time):
+def get_answer_from_client(client_socket, client_address, trivia_sending_time):
     client_socket.settimeout(15)
-    try:
-        client_answer_encoded = client_socket.recv(1024)
-        # to-do check if client answer = "none"
-        client_time_to_answer = round((time.time() - trivia_sending_time), 2)
-    except Exception as e:
-        handle_socket_error(e, "receiving data", "get_answer_from_client")
-        clients_dict[client_address]["client_answers"].append(0)  # if the client didn't answer, put in 0 to mark that
-        clients_dict[client_address]["answers_times"].append(0)  # Put a default high time to indicate no response
-        return
-    clients_dict[client_address]["answers_times"].append(client_time_to_answer)
-    client_answer_decoded = client_answer_encoded.decode('utf-8')
-    if "true" in client_answer_decoded:
-        with clients_lock:
-            clients_dict[client_address]["client_answers"].append(True)
-    elif "false" in client_answer_decoded:
-        with clients_lock:
-            clients_dict[client_address]["client_answers"].append(False)
-    else:
-        print("Invalid answer received. Bug maybe?")
-        return
+    global clients_dict
+    global clients_lock
+    while True:
+        try:
+            client_answer_encoded = client_socket.recv(1024)
+            if not client_answer_encoded:
+                raise ValueError("No data received; client may have disconnected")
+            client_time_to_answer = round((time.time() - trivia_sending_time), 2)
+            break
+        except socket.timeout:
+            print("Socket timed out while waiting for client response")
+            clients_dict[client_address]["client_answers"].append(-1)  # if the client didn't answer, mark with -1
+            clients_dict[client_address]["answers_times"].append(0)  # Put a default 0 to indicate no response
+            return
+        except BlockingIOError:
+            print("BlockingIOError occurred while waiting for client response")
+            clients_dict[client_address]["client_answers"].append(-1)
+            clients_dict[client_address]["answers_times"].append(0)
+            return
+        except socket.error as e:
+            handle_socket_error(e, "receiving data", "get_answer_from_client")
+            clients_dict[client_address]["client_answers"].append(-1)
+            clients_dict[client_address]["answers_times"].append(0)
+            return
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            return
 
+    clients_dict[client_address]["answers_times"].append(client_time_to_answer)
+    client_answer_decoded = client_answer_encoded.decode('utf-8').strip().lower()
+
+    if "true" in client_answer_decoded:
+        clients_dict[client_address]["client_answers"].append(1)
+    elif "false" in client_answer_decoded:
+        clients_dict[client_address]["client_answers"].append(0)
+    else:
+        print(f"Invalid answer received:", {client_answer_decoded})
 
 def get_all_answers(trivia_sending_time: float):
     list_of_threads = []
     for client_address in clients_dict.keys():
         client_socket = clients_dict[client_address]["socket"]
         thread = threading.Thread(target=get_answer_from_client,
-                                  args=(client_address, client_socket, trivia_sending_time))
+                                  args=(client_socket, client_address, trivia_sending_time))
         thread.start()
         list_of_threads.append(thread)  # Store the thread reference in the list
-
+    time.sleep(5)
     # Wait for all threads to complete
     for thread in list_of_threads:
-        thread.join()
+        thread.join(timeout=10)
 
 
 def calculate_winner(correct_answer: bool) -> tuple | None:
@@ -237,15 +256,15 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
     for client_address in clients_dict.keys():
         client_answer = clients_dict[client_address]["client_answers"][-1]
         client_time = clients_dict[client_address]["answers_times"][-1]
-        if client_answer == 0:  # Skip clients who didn't answer
+        if client_answer < 0:  # Skip clients who didn't answer
             continue
         if client_answer == correct_answer and client_time < min_timestamp:
             min_client_address = client_address
             min_timestamp = client_time
     if min_client_address is None:
         return None
-    else:
-        return min_client_address
+
+    return min_client_address
 
 
 def send_winner_message(winner_address):
@@ -268,19 +287,23 @@ def send_winner_message(winner_address):
 #         print(f"Client {clients_dict[client_address]['name']} disconnected.")
 
 
-def send_statistics_to_all_clients(clients_dict):
-    headers = ["Player Name", "Correct Answers", "Average Time"]
+def send_statistics_to_all_clients(correct_answer):
+    headers = ["Player Name", "Answer", "Time"]
     table_data = []
 
     for addr, info in clients_dict.items():
-        if info['currently_listening_to_client']:  # Ensure we only send to active clients
+        if info['is_client_active']:  # Ensure we only send to active clients
             name = info['name']
-            correct_answers = sum(1 for answer in info['client_answers'] if answer)
-            total_time = sum(info['answers_times'])
-            count_times = len(info['answers_times'])
-            average_time = total_time / count_times if count_times > 0 else 0
+            if info['client_answers'][-1] == 1:
+                client_answer = "True"
+            elif info['client_answers'][-1] == 0:
+                client_answer = "False"
+            else:
+                client_answer = "No answer"
+            client_time = info['answers_times'][-1]
+            # average_time = total_time / count_times if count_times > 0 else 0
             # Append player data to the table list
-            table_data.append([name, correct_answers, f"{average_time:.2f} seconds"])
+            table_data.append([name, client_answer, f"{client_time:.2f} seconds"])
 
     # Create a table using tabulate
     stats_table = tabulate(table_data, headers=headers, tablefmt="pretty")
@@ -293,12 +316,12 @@ def send_statistics_to_all_clients(clients_dict):
     # Encode and send
     stats_message_encoded = formatted_table.encode('utf-8')
     for addr, info in clients_dict.items():
-        if info['currently_listening_to_client']:
+        if info['is_client_active']:
             try:
                 info['socket'].sendall(stats_message_encoded)
             except Exception as e:
-                handle_socket_error(e, "sendall", "send_statistics_to_all_clients")
-                info['currently_listening_to_client'] = False  # Mark client as inactive if sending fails
+                info['is_client_active'] = False
+                handle_socket_error(e, "sendall", "send_statistics")
 
 
 def close_all_client_sockets():
@@ -331,17 +354,18 @@ def client_handler(client_socket, client_address):
 
 def monitor_clients():
     while True:
-        time.sleep(1)
+        time.sleep(3)
         for client_address, client_info in list(clients_dict.items()):
             if not is_client_alive(client_info['socket']):
                 remove_client(client_address)
 
 
-def is_client_alive(sock):
+def is_client_alive(sock) -> bool:
     try:
         # this is a non-blocking call
         sock.setblocking(0)
         data = sock.recv(16)
+        sock.setblocking(1)
         if not data:
             return False
         return True
@@ -413,10 +437,9 @@ if __name__ == "__main__":
         try:
             # Wait for the stop_event to be set
             while not stop_event.is_set():
-                time.sleep(5)  # Reduced wait timeout for more responsive handling
-                print("Server running...")
+                time.sleep(1)  # Reduced wait timeout for more responsive handling
 
-            if not any(client['currently_listening_to_client'] for client in clients_dict.values()):
+            if not any(client['is_client_active'] for client in clients_dict.values()):
                 continue
 
             # if any(client['currently_listening_to_client'] for client in clients_dict.values()):
@@ -425,11 +448,14 @@ if __name__ == "__main__":
             udp_thread.join()
             tcp_thread.join()
 
-            welcome_message(server_name, trivia_topic, clients_dict)
+            return_value_welcome = welcome_message(server_name, trivia_topic, clients_dict)
+            if return_value_welcome == -1:
+                continue
             correct_answer = send_trivia_question(questions)
-            time.sleep(2)  # Adjust timing as needed
+            time.sleep(1)  # Adjust timing as needed
             trivia_sending_time = time.time()
             get_all_answers(trivia_sending_time)
+            time.sleep(1)
             winner_client_address = calculate_winner(correct_answer)
             send_winner_message(winner_client_address)
             send_statistics_to_all_clients(clients_dict)  # Call after a round to update clients
