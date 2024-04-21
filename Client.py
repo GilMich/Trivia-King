@@ -163,11 +163,11 @@ def get_answer_from_user() -> bool | None:
     input_thread.start()
     try:
         # Try to get input within 10 seconds
-        user_input = input_queue.get(block=True, timeout=10)
+        user_input = input_queue.get(block=True, timeout=20)
     except queue.Empty:
         # If no input was received within 10 seconds, print a message
         print("No input received within 10 seconds.")
-        user_input = "none"
+        user_input = "None"
         # Set the stop event to stop the input thread
         stop_event.set()
     # if user_input is None:
@@ -225,28 +225,31 @@ if __name__ == "__main__":
     while True:
         try:
             server_name, server_ip, server_port = looking_for_a_server()
-            server_tcp_socket = connect_to_server(server_ip, server_port)
+            if server_name:
+                server_tcp_socket = connect_to_server(server_ip, server_port)
+                if server_tcp_socket:
+                    if not print_welcome_message(server_tcp_socket):
+                        raise Exception("Failed to receive welcome message.")
+                    if not print_trivia_question(server_tcp_socket):
+                        raise Exception("Failed to receive trivia question.")
+                    user_answer = get_answer_from_user()
+                    if not send_answer_to_server(server_tcp_socket, user_answer):
+                        raise Exception("Failed to send answer.")
 
-            print_welcome_message(server_tcp_socket)
-            print_trivia_question(server_tcp_socket)
-            user_answer = get_answer_from_user()
-            send_answer_to_server(server_tcp_socket, user_answer)
-            print_message_from_server(server_tcp_socket) # print winner message
-            print_message_from_server(server_tcp_socket) # print stats message
-            server_tcp_socket.close()
-            server_tcp_socket = None
+                    print_message_from_server(server_tcp_socket) # print winner message
+                    print_message_from_server(server_tcp_socket) # print stats message
+                    # server_tcp_socket.close()
+                    # server_tcp_socket = None
         except KeyboardInterrupt:
             print("Client is shutting down due to a keyboard interrupt.")
-            if server_tcp_socket:
-                server_tcp_socket.close()
-            server_tcp_socket = None
-
 
         except Exception as e:
             print("Connection error:", e)
+
+        finally:
             if server_tcp_socket:
                 server_tcp_socket.close()
-            server_tcp_socket = None
+                print("Disconnected from the server.")
         # time.sleep(5)  # Adjust timing as needed
 
         # if not print_welcome_message(server_tcp_socket) or not print_trivia_question(server_tcp_socket):
