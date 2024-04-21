@@ -148,17 +148,27 @@ def save_client_info(client_socket, client_address):
         except Exception as e:
             handle_socket_error(e, "receiving or processing data", "save_client_info")
 
-def watch_for_inactivity(stop_event):
+
+def watch_for_inactivity(stop_event, timeout=10):
+    """
+    Monitors the time elapsed since the last client interaction and sets a stop event
+    if the timeout is exceeded to indicate inactivity.
+
+    Args:
+        stop_event (threading.Event): An event to set when the timeout is reached.
+        timeout (int, optional): The number of seconds to wait before considering inactive. Default is 10 seconds.
+
+    Globals:
+        last_connection_time (float): The last recorded time of client interaction.
+    """
     global last_connection_time
     while not stop_event.is_set():
         with time_lock:
             elapsed = time.time() - last_connection_time
-        if elapsed >= 10:
+        if elapsed >= timeout:
             stop_event.set()
             break
-        else:
-            # Sleep briefly to avoid busy waiting
-            time.sleep(1)
+        time.sleep(1)  # Sleep briefly to avoid busy waiting
 
 
 def tcp_listener(server_port, stop_event):
