@@ -14,10 +14,30 @@ clients_lock = threading.Lock()
 server_name = "Trivia King"
 trivia_topic = "The Olympics"
 
-
+# ------------- CHECKED ----------------
 def load_trivia_questions(file_path):
-    with open(file_path, 'r') as file:
-        return json.load(file)
+    """
+    Loads trivia questions from a JSON file.
+
+    Args:
+        file_path (str): Path to the file containing trivia questions in JSON format.
+
+    Returns:
+        list: A list of trivia questions loaded from the file.
+
+    Raises:
+        FileNotFoundError: If the file specified does not exist.
+        json.JSONDecodeError: If the file is not a valid JSON.
+    """
+    try:
+        with open(file_path, 'r') as file:
+            questions = json.load(file)
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"The file {file_path} does not exist.") from e
+    except json.JSONDecodeError as e:
+        raise json.JSONDecodeError(f"Error decoding JSON from {file_path}.", file_path, e.pos) from e
+
+    return questions
 
 
 def handle_socket_error(exception, operation, function):
@@ -113,7 +133,7 @@ def udp_broadcast(server_name, server_port, stop_event):
         time.sleep(2)  # sleep to avoid busy waiting
 
 
-
+# ------------- CHECKED ----------------
 def save_client_info(client_socket, client_address):
     """
     Receives data from a client socket to update global client records.
@@ -430,7 +450,11 @@ if __name__ == "__main__":
 
     while True:
         last_connection_time = 99999999999
-        questions = load_trivia_questions("olympics_trivia_questions.json")
+        try:
+            questions = load_trivia_questions("o1lympics_trivia_questions.json")
+        except Exception as e:
+            print(f"Failed to load questions: {e}")
+            break
         server_port = find_free_port()
         print(f"Server started, listening on IP address: {get_local_ip()}")
         stop_event = threading.Event()
