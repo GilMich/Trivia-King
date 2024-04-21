@@ -71,14 +71,6 @@ def handle_socket_error(exception, function):
         print("An unexpected type of error occurred. Please consult system logs or network settings.")
 
 
-# def socket_error_info(exception, function, details):
-#     error_type = type(exception).__name__
-#     error_message = str(exception)
-#
-#     error_message = f"Error {error_type} occurred: {error_message} in the function: {function}. Additional details: {details}"
-#     return error_message
-
-
 # ------------- CHECKED ----------------
 def get_local_ip():
     """
@@ -134,25 +126,31 @@ def find_free_port():
         return assigned_port
 
 
+# ------------- CHECKED ----------------
 def udp_broadcast(server_name, server_port, stop_event):
+    """
+    Continuously broadcasts UDP packets containing server information until a stop event is triggered.
+
+    Args:
+        server_name (str): Name of the server to broadcast.
+        server_port (int): Port number on which the server will listen for TCP connections.
+        stop_event (threading.Event): An event to stop the broadcast when set.
+    """
     broadcast_address = get_default_broadcast()
-    # Sets a socekt instance for udp broadcasting
-    udp_socket = sock.socket(sock.AF_INET, sock.SOCK_DGRAM)
-    udp_socket.setsockopt(sock.SOL_SOCKET, sock.SO_BROADCAST, 1)
-
-    # Prepare the message according to the specified packet format
+    # Message setup
     magic_cookie = 0xabcddcba
-    message_type = 0x2  # Offer message
-    server_name_padded = server_name.ljust(32)  # Ensure the server name is 32 characters long
-    message = magic_cookie.to_bytes(4, 'big') + message_type.to_bytes(1,
-                                                                      'big') + server_name_padded.encode() + server_port.to_bytes(
-        2, 'big')
+    message_type = 0x2  # Offer message type
+    server_name_padded = server_name.ljust(32)  # Pad server name to ensure it is 32 characters
+    message = magic_cookie.to_bytes(4, 'big') + message_type.to_bytes(1, 'big') + \
+              server_name_padded.encode() + server_port.to_bytes(2, 'big')
 
-    # Broadcast
-    while not stop_event.is_set():
-        ip = get_local_ip()
-        udp_socket.sendto(message, (broadcast_address, 13117))
-        time.sleep(2)  # sleep to avoid busy waiting
+    # Set up and start broadcasting
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
+        udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        while not stop_event.is_set():
+            udp_socket.sendto(message, (broadcast_address, 13117))
+            time.sleep(2)  # Sleep to manage loop frequency and reduce network congestion
+
 
 
 # ------------- CHECKED ----------------
@@ -537,14 +535,3 @@ if __name__ == "__main__":
         #     print("Server shutdown completed.")
         #     # Clearing and reinitializing for a new round
         #     time.sleep(5)
-    # ------------------------------------------------------- game - loop --------------------------------------------------------------------------- #
-
-    # TODO send first random question to all the players - the clients (new function) - need to test this
-
-    # TODO another function to receive inputs from the players while still liestening and saving all the users input *multi threaded - need to test this
-
-    # TODO collect interesting statistics when the game finished
-
-    # ----------------------------------------------------------------------------------------------------------------------------------------------- #
-
-    # TODO check how to use ANSI color
