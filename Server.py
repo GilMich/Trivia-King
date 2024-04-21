@@ -388,30 +388,6 @@ def remove_client(client_address):
         print(f"\033[31mRemoved\033[0m client {client_address} from active clients.")
 
 
-questions = [
-    {"question": "Has the United States ever hosted the Summer Olympics?", "answer": True},
-    {"question": "Is the motto of the Olympics 'Faster, Higher, Stronger, Together'?", "answer": True},
-    {"question": "Did the ancient Olympics originate in France?", "answer": False},
-    {"question": "Are the Olympic rings colors black, green, red, yellow, and blue?", "answer": True},
-    {"question": "Is golf an Olympic sport?", "answer": True},
-    {"question": "Were the first modern Olympics held in 1896?", "answer": True},
-    {"question": "Has every country in the world participated in the Olympics at least once?", "answer": False},
-    {"question": "Are the Winter and Summer Olympics held in the same year?", "answer": False},
-    {"question": "Did the original Olympic Games include women as participants?", "answer": False},
-    {"question": "Is swimming a part of the Winter Olympics?", "answer": False},
-    {"question": "Has Tokyo hosted the Summer Olympics more than once?", "answer": True},
-    {"question": "Is the Olympic flame lit in Olympia, Greece, before each Games?", "answer": True},
-    {"question": "Did Michael Phelps take the most gold medals in a single Olympics in Olympics history?",
-     "answer": True},
-    {"question": "Does the city hosting the Olympics also host the Paralympics shortly after?", "answer": True},
-    {"question": "Was the marathon originally 26.2 miles when introduced to the Olympics?", "answer": False},
-    {"question": "Do the Olympics take place every two years?", "answer": False},
-    {"question": "Has a single country ever swept all medals in an Olympic event?", "answer": True},
-    {"question": "Is figure skating a part of the Summer Olympics?", "answer": False},
-    {"question": "Are Olympic gold medals made entirely of gold?", "answer": False},
-    {"question": "Did the Olympic Games continue during World War II?", "answer": False}
-]
-
 # def game_loop():
 #     threading.Thread(target=monitor_clients, daemon=True).start()
 #
