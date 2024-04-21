@@ -50,6 +50,14 @@ def handle_socket_error(exception, operation, function):
         print("An unexpected type of error occurred. Please consult system logs or network settings.")
 
 
+def socket_error_info(exception, function, details):
+    error_type = type(exception).__name__
+    error_message = str(exception)
+
+    error_message = f"Error {error_type} occurred: {error_message} in the function: {function}. Additional details: {details}"
+    return error_message
+
+
 def get_local_ip():
     """
     Retrieves the local IP address of the machine.
@@ -105,25 +113,40 @@ def udp_broadcast(server_name, server_port, stop_event):
         time.sleep(2)  # sleep to avoid busy waiting
 
 
+
 def save_client_info(client_socket, client_address):
-    global clients_dict
+    """
+    Receives data from a client socket to update global client records.
+
+    If successful, decodes the data, updates the client's details in the global dictionary, and
+    refreshes the last interaction timestamp. Logs an error and exits early if data reception fails.
+
+    Args:
+        client_socket (socket.socket): The client's socket connection.
+        client_address (tuple): The client's address.
+
+    Globals:
+        last_connection_time (float): Timestamp of the last client interaction.
+    """
     global last_connection_time
     if client_address not in clients_dict:
         try:
             received_data = client_socket.recv(1024)  # Adjust buffer size as needed
+            if not received_data:
+                e = ValueError("No data received from client.")
+                handle_socket_error(e, "receiving data", "save_client_info")
+
+            client_name = received_data.decode('utf-8').rstrip('\n')
+            clients_dict[client_address] = {
+                "name": client_name,
+                "socket": client_socket,
+                "is_client_active": True,
+                "client_answers": [],
+                "answers_times": []
+            }
+            last_connection_time = time.time()
         except Exception as e:
-            handle_socket_error(e, "receiving data", "save_client_info")
-            return
-
-        client_name = received_data.decode('utf-8').rstrip('\n')
-        clients_dict[client_address] = {"name": client_name,
-                                        "socket": client_socket,
-                                        "is_client_active": True,
-                                        "client_answers": [],
-                                        "answers_times": []}
-        last_connection_time = time.time()
-    # if the client is already in the dictionary, do nothing. the client is already connected from previous round.
-
+            handle_socket_error(e, "receiving or processing data", "save_client_info")
 
 def watch_for_inactivity(stop_event):
     global last_connection_time
