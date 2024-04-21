@@ -152,7 +152,6 @@ def udp_broadcast(server_name, server_port, stop_event):
             time.sleep(2)  # Sleep to manage loop frequency and reduce network congestion
 
 
-
 # ------------- CHECKED ----------------
 def save_client_info(client_socket, client_address):
     """
@@ -189,6 +188,7 @@ def save_client_info(client_socket, client_address):
             handle_socket_error(e, "save_client_info")
 
 
+# ------------- CHECKED ----------------
 def watch_for_inactivity(stop_event, timeout=10):
     """
     Monitors the time elapsed since the last client interaction and sets a stop event
@@ -236,16 +236,34 @@ def tcp_listener(server_port, stop_event):
         continue  # if a client already connected while waiting for another one, the stop event will be true here. if nobody connected we will just keep waiting
 
 
-def welcome_message(server_name, trivia_topic, clients_dict):
-    if len(clients_dict) == 0:
+# ------------- CHECKED ----------------
+def welcome_message(server_name, trivia_topic):
+    """
+    Sends a welcome message to all connected clients.
+
+    Args:
+        server_name (str): Name of the server.
+        trivia_topic (str): Topic for the trivia session.
+
+    Returns:
+        int: -1 if no clients are connected, otherwise returns None.
+    """
+    if not clients_dict:
         print("No clients connected to the server.")
         return -1
-    message = f"Welcome to the {server_name} server, where we are be answering trivia questions about {trivia_topic}.\n"
-    # It's a good practice to list keys to avoid RuntimeError for changing dict size during iteration
-    for client_tuple in enumerate(list(clients_dict.keys()), start=1):
-        client_info = clients_dict[client_tuple[1]]
-        message += f"Player {client_tuple[0]}: {client_info['name']}\n"
+
+    # Create a formatted welcome message with instructions
+    instructions = "Please respond to each question by typing '1', 't', or 'y' for True and '0', 'f', or 'n' for False."
+    message = f"\nWelcome to the {server_name} server, where we are answering trivia questions about {trivia_topic}.\n{instructions}\n"
+
+    # Append each client's name to the message
+    for index, (address, client_info) in enumerate(clients_dict.items(), start=1):
+        message += f"Player {index}: {client_info['name']}\n"
+
+    # Encode the message once
     message_encoded = message.encode('utf-8')
+
+    # Send the encoded message to all clients
     for client in clients_dict.values():
         client["socket"].sendall(message_encoded)
     print(message)
@@ -501,7 +519,7 @@ if __name__ == "__main__":
             udp_thread.join()
             tcp_thread.join()
 
-            return_value_welcome = welcome_message(server_name, trivia_topic, clients_dict)
+            return_value_welcome = welcome_message(server_name, trivia_topic)
             if return_value_welcome == -1:
                 continue
             correct_answer = send_trivia_question(questions)
