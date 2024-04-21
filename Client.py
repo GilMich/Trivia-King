@@ -168,11 +168,11 @@ def get_answer_from_user() -> bool | None:
     input_thread.start()
 
     try:
-        user_input = input_queue.get(block=True, timeout=10)  # Reduced timeout to test quicker
+        user_input = input_queue.get(block=True, timeout=15)  # Reduced timeout to test quicker
     except queue.Empty:
         print("No input received within the time limit.")
         stop_event.set()  # Ensure we signal the thread to stop if it hasn't already
-        input_thread.join()  # Wait for the thread to finish
+        input_thread.join(timeout=15)  # Wait for the thread to finish
         return None
 
     if user_input in valid_true_keys:
@@ -238,8 +238,7 @@ if __name__ == "__main__":
                 raise Exception("Failed to receive trivia question.")
 
             user_answer = get_answer_from_user()
-            if user_answer is not None and not send_answer_to_server(server_tcp_socket, user_answer):
-                raise Exception("Failed to send answer.")
+            send_answer_to_server(server_tcp_socket, user_answer)
 
             print_message_from_server(server_tcp_socket)  # Winner message
             print_message_from_server(server_tcp_socket)  # Stats message
