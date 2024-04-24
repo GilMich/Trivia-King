@@ -294,6 +294,7 @@ def send_trivia_question(questions) -> bool:
         except Exception as e:
             # Log the error and continue to attempt to send to other clients
             handle_socket_error(e,  "sending_trivia_question")
+    print(message.encode('utf-8'))
     return trivia_answer
 
 
@@ -386,7 +387,7 @@ def send_winner_message(winner_address):
         except Exception as e:
             handle_socket_error(e, "send_winner_message")
             continue
-
+    print(message)
 
 def send_statistics_to_all_clients(correct_answer):
     headers = ["Player Name", "Answer", "Time"]
@@ -423,7 +424,7 @@ def send_statistics_to_all_clients(correct_answer):
             except Exception as e:
                 info['is_client_active'] = False
                 handle_socket_error(e, "send_statistics")
-
+    print(formatted_table)
 
 def close_all_client_sockets():
     for client_info in clients_dict.values():
