@@ -116,8 +116,12 @@ def connect_to_server(server_ip, server_port):
 def print_welcome_message(server_tcp_socket):
     try:
         message_encoded = server_tcp_socket.recv(1024)
+
+    except ConnectionResetError as cre:
+        raise RestartGameError(
+            f"{type(cre)} Server disconnected or crashed while trying to receive the welcome message.\n") from cre
     except OSError as e:
-        raise OSError(f"A {type(e)} occurred while trying to receive the welcome message: {e}\n") from e
+        raise ContinueGameError(f"A {type(e)} occurred while trying to receive the welcome message: {e}\n") from e
     message_decoded = message_encoded.decode('utf-8')
     print(message_decoded)
     return True
@@ -126,15 +130,24 @@ def print_welcome_message(server_tcp_socket):
 def print_trivia_question(server_tcp_socket):
     try:
         message_encoded = server_tcp_socket.recv(1024)
+
+    except ConnectionResetError as cre:
+        raise RestartGameError(
+            f"{type(cre)} Server disconnected or crashed while trying to receive the trivia question.\n") from cre
     except OSError as e:
-        raise OSError(f"A {type(e)} occurred while trying to receive the trivia question: {e}\n") from e
+        raise ContinueGameError(f"A {type(e)} occurred while trying to receive the trivia question: {e}\n") from e
 
     message_decoded = message_encoded.decode('utf-8')
     print(message_decoded)
     return True
 
 
-class InGameError(Exception):
+class ContinueGameError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
+
+class RestartGameError(Exception):
     def __init__(self, message):
         super().__init__(message)
 
@@ -201,10 +214,10 @@ def send_answer_to_server(server_tcp_socket, user_answer):
     try:
         server_tcp_socket.sendall(message.encode())
     except ConnectionResetError as cre:
-        raise OSError(f"{type(cre)} Server disconnected or crashed while trying to send the answer.\n") from cre
+        raise RestartGameError(
+            f"{type(cre)} Server disconnected or crashed while trying to send the answer.\n") from cre
     except OSError as e:
-        raise InGameError(f"Error occurred while sending the answer to the server: {e}\n") from e
-
+        raise ContinueGameError(f"Error occurred while sending the answer to the server: {e}\n") from e
 
 
 def print_results_from_server(server_tcp_socket):
@@ -217,7 +230,7 @@ def print_results_from_server(server_tcp_socket):
         stats_message = stats_message_encoded.decode('utf-8')
         print(stats_message + "\n")
     except OSError as e:
-        raise OSError(f"Error {type(e)} occurred while receiving game results from server: {e}") from e
+        raise RestartGameError(f"Error {type(e)} occurred while receiving game results from server: {e}") from e
 
 
 # Main client function
@@ -229,24 +242,32 @@ if __name__ == "__main__":
             server_tcp_socket = connect_to_server(server_ip, server_port)
             if not server_tcp_socket:
                 continue
-            print_welcome_message(server_tcp_socket)
-            print_trivia_question(server_tcp_socket)
-            user_answer = get_answer_from_user()
-            try:
+            try:  # if there is error here try to get the trivia question still.
+                print_welcome_message(server_tcp_socket)
+            except ContinueGameError as cge:
+                print(cge)
+            try:  # if there is error here, try to get the game results still.
+                print_trivia_question(server_tcp_socket)
+                user_answer = get_answer_from_user()
                 result_sending_to_server = send_answer_to_server(server_tcp_socket, user_answer)
-            except InGameError as ige:
+            except ContinueGameError as ige:
                 print(ige)
             print_results_from_server(server_tcp_socket)
 
-        except ConnectionResetError as cre:
+        except RestartGameError as rge:
+            print(rge)
+            continue
+
+        except ConnectionResetError as cre:  # this never should happen, but just in case
             print("Server disconnected unexpectedly, looking for new server...")
+            # this never should happen, but just in case
             continue
 
         except KeyboardInterrupt:
             print("Client is shutting down due to a keyboard interrupt.")
-            break
-        except OSError as e:
-            print("Error:", e)
+
+        except OSError as e:  # this never should happen, but just in case
+            print(e)
         finally:
             if server_tcp_socket:
                 server_tcp_socket.close()
