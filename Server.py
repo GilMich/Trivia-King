@@ -163,19 +163,19 @@ def tcp_listener(server_port, stop_event):
         continue  # if a client already connected while waiting for another one, the stop event will be true here. if nobody connected we will just keep waiting
 
 
-def welcome_message(server_name, trivia_topic, clients_dict):
+def send_welcome_message(server_name, trivia_topic, clients_dict):
     if len(clients_dict) == 0:
         print("No clients connected to the server.")
         return -1
-    message = f"Welcome to the {server_name} server, where we are be answering trivia questions about {trivia_topic}.\n"
+    welcome_message = f"Welcome to the {server_name} server, where we are be answering trivia questions about {trivia_topic}.\n"
     # It's a good practice to list keys to avoid RuntimeError for changing dict size during iteration
     for client_tuple in enumerate(list(clients_dict.keys()), start=1):
         client_info = clients_dict[client_tuple[1]]
-        message += f"Player {client_tuple[0]}: {client_info['name']}\n"
-    message_encoded = message.encode('utf-8')
+        welcome_message += f"Player {client_tuple[0]}: {client_info['name']}\n"
+    welcome_message_encoded = welcome_message.encode('utf-8')
     for client in clients_dict.values():
-        client["socket"].sendall(message_encoded)
-    print(message)
+        client["socket"].sendall(welcome_message_encoded)
+    print(welcome_message_encoded)
 
 
 def send_trivia_question(questions) -> bool:
@@ -183,13 +183,15 @@ def send_trivia_question(questions) -> bool:
     trivia_question = random_question['question']
     trivia_answer = random_question['answer']
 
-    message = "True or False: " + trivia_question
+    trivia_question_message = "True or False: " + trivia_question
+    trivia_question_message_encoded = trivia_question_message.encode('utf-8')
     for client in clients_dict.values():
         try:
-            client["socket"].sendall(message.encode('utf-8'))
+            client["socket"].sendall(trivia_question_message_encoded)
         except Exception as e:
             handle_socket_error(e, "sendall", "sending_trivia_question")
             continue
+    print(trivia_question_message_encoded)
     return trivia_answer
 
 
@@ -202,24 +204,11 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
         if not client_answer_encoded:
             raise ValueError("No data received; client may have disconnected")
         client_time_to_answer = round((time.time() - trivia_sending_time), 2)
-    except socket.timeout:
-        print("Socket timed out while waiting for client response")
+    except socket.timeout and OSError as e:
         clients_dict[client_address]["client_answers"].append(-1)  # if the client didn't answer, mark with -1
         clients_dict[client_address]["answers_times"].append(0)  # Put a default 0 to indicate no response
         return
-    except BlockingIOError:
-        print("BlockingIOError occurred while waiting for client response")
-        clients_dict[client_address]["client_answers"].append(-1)
-        clients_dict[client_address]["answers_times"].append(0)
-        return
-    except socket.error as e:
-        handle_socket_error(e, "receiving data", "get_answer_from_client")
-        clients_dict[client_address]["client_answers"].append(-1)
-        clients_dict[client_address]["answers_times"].append(0)
-        return
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        return
+
 
     clients_dict[client_address]["answers_times"].append(client_time_to_answer)
     client_answer_decoded = client_answer_encoded.decode('utf-8').strip().lower()
@@ -268,17 +257,19 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
 
 def send_winner_message(winner_address):
     if winner_address is None:
-        message = "No one answered correctly this time. Better luck next time!"
+        winner_message = "No one answered correctly this time. Better luck next time!"
     else:
         winner_name = clients_dict[winner_address]["name"]
-        message = f"{winner_name} won! {winner_name} answered correctly first with a time of {clients_dict[winner_address]['answers_times'][-1]} seconds."
+        winner_message = f"{winner_name} won! {winner_name} answered correctly first with a time of {clients_dict[winner_address]['answers_times'][-1]} seconds."
+
+    winner_message_encoded = winner_message.encode('utf-8')
     for client in clients_dict.values():
         try:
-            client["socket"].sendall(message.encode('utf-8'))
+            client["socket"].sendall(winner_message_encoded)
         except Exception as e:
             handle_socket_error(e, "sendall", "send_winner_message")
             continue
-
+    print(winner_message_encoded)
 
 # def remove_client(client_address, clients_dict):
 #     if client_address in clients_dict:
@@ -321,7 +312,7 @@ def send_statistics_to_all_clients(correct_answer):
             except Exception as e:
                 info['is_client_active'] = False
                 handle_socket_error(e, "sendall", "send_statistics")
-
+    print(stats_message_encoded)
 
 def close_all_client_sockets():
     for client_info in clients_dict.values():
@@ -423,7 +414,7 @@ if __name__ == "__main__":
             udp_thread.join()
             tcp_thread.join()
 
-            return_value_welcome = welcome_message(server_name, trivia_topic, clients_dict)
+            return_value_welcome = send_welcome_message(server_name, trivia_topic, clients_dict)
             if return_value_welcome == -1:
                 continue
             correct_answer = send_trivia_question(questions)

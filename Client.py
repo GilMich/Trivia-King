@@ -215,9 +215,9 @@ def send_answer_to_server(server_tcp_socket, user_answer):
         server_tcp_socket.sendall(message.encode())
     except ConnectionResetError as cre:
         raise RestartGameError(
-            f"{type(cre)} Server disconnected or crashed while trying to send the answer.\n") from cre
+            f"{type(cre)}  Server disconnected or crashed while trying to send the answer.\n") from cre
     except OSError as e:
-        raise ContinueGameError(f"Error occurred while sending the answer to the server: {e}\n") from e
+        raise ContinueGameError(f"Error occurred while sending the answer to the server: {type(e)} {e}\n") from e
 
 
 def print_results_from_server(server_tcp_socket):
