@@ -70,23 +70,23 @@ def looking_for_a_server():
         udp_socket.bind(('', 13117))
     except OSError as e:
         if e.errno == errno.EADDRINUSE:
-            raise OSError("Error while binding the socket: Address already in use. Please try again later.") from e
+            raise RestartGameError("Error while binding the socket: Address already in use. Please try again later.") from e
 
         else:
-            raise OSError("An unrecognized error has occurred during binding, trying to bind again...") from e
+            raise RestartGameError("An unrecognized error has occurred during binding, trying to bind again...") from e
     try:
         data, addr = udp_socket.recvfrom(
             1024)  # Blocking method! it won't reach the next line until it detects a broadcast
 
     except sock.timeout as t:
-        raise OSError(f"timeout receiving udp data packet from the server! ") from t
+        raise RestartGameError(f"timeout receiving udp data packet from the server! ") from t
     magic_cookie, message_type, server_name, server_port = unpack_packet(data)
 
     if magic_cookie != 0xabcddcba:
-        raise OSError("Invalid magic cookie in udp packet! nice try hacker!")
+        raise RestartGameError("Invalid magic cookie in udp packet! nice try hacker!")
 
     if message_type != 0x2:
-        raise OSError("Invalid message type in udp packet!")
+        raise RestartGameError("Invalid message type in udp packet!")
 
     server_ip = addr[0]
     print(f'Received offer from server "{server_name}" at address {addr[0]}, attempting to connect...')
