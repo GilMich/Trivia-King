@@ -322,22 +322,28 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
             handle_socket_error(e, "get_answer_from_client")
 
     except (socket.timeout, BlockingIOError, socket.error) as e:
-        print(f"Error receiving client response: {e}")
+        handle_socket_error(e, "get_answer_from_client")
         clients_dict[client_address]["client_answers"].append(-1)
         clients_dict[client_address]["answers_times"].append(0)
 
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        print(f"Unexpected error: \n", handle_socket_error(e, "get_answer_from_client"))
         clients_dict[client_address]["client_answers"].append(-1)
         clients_dict[client_address]["answers_times"].append(0)
 
 
 def get_all_answers(trivia_sending_time: float):
+    """
+    Starts threads to collect answers from all clients and waits for them to complete.
+
+    Args:
+        trivia_sending_time (float): The timestamp when the trivia question was sent.
+    """
     list_of_threads = []
-    for client_address in clients_dict.keys():
-        client_socket = clients_dict[client_address]["socket"]
+    for client_address, client_info in clients_dict.items():
         thread = threading.Thread(target=get_answer_from_client,
-                                  args=(client_socket, client_address, trivia_sending_time))
+                                  args=(client_info["socket"], client_address, trivia_sending_time))
+
         thread.start()
         list_of_threads.append(thread)  # Store the thread reference in the list
     time.sleep(5)
@@ -522,8 +528,8 @@ if __name__ == "__main__":
             tcp_thread.join()
 
             return_value_welcome = welcome_message(server_name, trivia_topic)
-            if return_value_welcome == -1:
-                continue
+            # if return_value_welcome == -1:
+            #     continue
             correct_answer = send_trivia_question(questions)
             time.sleep(1)  # Adjust timing as needed
             trivia_sending_time = time.time()
