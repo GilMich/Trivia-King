@@ -47,7 +47,6 @@ def handle_socket_error(exception, function):
 
     Args:
     exception: The exception instance that was raised.
-    operation: A string describing the socket operation during which the error occurred.
     function: A string indicating the function name where the error occurred.
 
     This function prints a detailed error message based on the type of socket exception, the operation, and the function where it happened.
@@ -55,20 +54,13 @@ def handle_socket_error(exception, function):
     error_type = type(exception).__name__
     error_message = str(exception)
 
-    print(f"Error occurred in function '{function}'")
-    print(f"Error Type: {error_type}")
-    print(f"Error Details: {error_message}")
+    # ANSI escape code for yellow
+    yellow_text_color = '\033[93m'
+    reset_color = '\033[0m'  # Reset to default terminal color
 
-    if isinstance(exception, sock.timeout):
-        print("This was a timeout error. Please check network conditions and retry.")
-    elif isinstance(exception, sock.error):
-        print("A general socket error occurred. Please check the socket operation and parameters.")
-    elif isinstance(exception, sock.gaierror):
-        print("An address-related error occurred. Please verify the network address details.")
-    elif isinstance(exception, sock.herror):
-        print("A host-related error occurred. Check DNS configurations and host availability.")
-    else:
-        print("An unexpected type of error occurred. Please consult system logs or network settings.")
+    print(f"{yellow_text_color}Error in: '{function}' function{reset_color} ")
+    print(f"{yellow_text_color}Error Type: {error_type}{reset_color}")
+    print(f"{yellow_text_color}Error Details: {error_message}{reset_color}")
 
 
 # ------------- CHECKED ----------------
