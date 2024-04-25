@@ -365,19 +365,17 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
     """
 
     min_timestamp = float('inf')
-    min_client_address = None
+    winner = None
     for client_address in clients_dict.keys():
         client_answer = clients_dict[client_address]["client_answers"][-1]
-        client_time = clients_dict[client_address]["answers_times"][-1]
+        client_response_time = clients_dict[client_address]["answers_times"][-1]
         if client_answer < 0:  # Skip clients who didn't answer
             continue
-        if client_answer == correct_answer and client_time < min_timestamp:
-            min_client_address = client_address
-            min_timestamp = client_time
-    if min_client_address is None:
-        return None
+        if client_answer == correct_answer and client_response_time < min_timestamp:
+            winner = client_address
+            min_timestamp = client_response_time
 
-    return min_client_address
+    return winner
 
 
 def send_winner_message(winner_address):
