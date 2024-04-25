@@ -8,7 +8,7 @@ from tabulate import tabulate
 import json
 
 clients_dict = {}
-last_connection_time = 99999999999
+last_connection_time = float('inf')
 time_lock = threading.Lock()
 clients_lock = threading.Lock()
 server_name = "Trivia King"
@@ -353,10 +353,18 @@ def get_all_answers(trivia_sending_time: float):
 
 
 def calculate_winner(correct_answer: bool) -> tuple | None:
-    """ this function will go over the dictionary and check who is the player
-    that answered correctly first, if exists. if no one answered correctly, it will return None """
+    """Determines the winner of a trivia round.
 
-    min_timestamp = 99999999999
+    Iterates over the client records to find the first client who answered correctly in the shortest time.
+
+    Args:
+        correct_answer (bool): The correct answer to the trivia question.
+
+    Returns:
+        tuple | None: The address of the winning client, or None if no correct answers were given.
+    """
+
+    min_timestamp = float('inf')
     min_client_address = None
     for client_address in clients_dict.keys():
         client_answer = clients_dict[client_address]["client_answers"][-1]
@@ -495,7 +503,7 @@ if __name__ == "__main__":
     threading.Thread(target=monitor_clients, daemon=True).start()
 
     while True:
-        last_connection_time = 99999999999
+        last_connection_time = float('inf')
         try:
             questions = load_trivia_questions("olympics_trivia_questions.json")
         except Exception as e:
