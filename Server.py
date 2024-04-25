@@ -173,7 +173,7 @@ def save_client_info(client_socket, client_address):
             received_data = client_socket.recv(1024)  # Adjust buffer size as needed
             if not received_data:
                 e = ValueError("No data received from client.")
-                raise handle_socket_error(e, "save_client_info")
+                handle_socket_error(e, "save_client_info")
 
             client_name = received_data.decode('utf-8').rstrip('\n')
             clients_dict[client_address] = {
@@ -315,7 +315,7 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
         client_answer_encoded = client_socket.recv(1024)
         if not client_answer_encoded:
             e = ValueError("No data received; client may have disconnected")
-            raise handle_socket_error(e, "get_answer_from_client")
+            handle_socket_error(e, "get_answer_from_client")
 
         client_time_to_answer = round((time.time() - trivia_sending_time), 2)
         clients_dict[client_address]["answers_times"].append(client_time_to_answer)
@@ -327,7 +327,7 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
         else:
             print(f"Invalid answer received: {client_answer_decoded}")
             e = ValueError(f"Invalid answer received: {client_answer_decoded}")
-            raise handle_socket_error(e, "get_answer_from_client")
+            handle_socket_error(e, "get_answer_from_client")
 
     except (socket.timeout, BlockingIOError, socket.error) as e:
         print(f"Error receiving client response: {e}")
