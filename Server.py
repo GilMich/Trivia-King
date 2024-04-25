@@ -379,6 +379,12 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
 
 
 def send_winner_message(winner_address):
+    """Sends a message to all clients announcing the winner of the trivia round or that no correct answers were received.
+
+    Args:
+        winner_address (tuple | None): The address of the winning client, or None if no winner.
+    """
+
     if winner_address is None:
         message = "No one answered correctly this time. Better luck next time!"
     else:
