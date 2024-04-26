@@ -1,3 +1,4 @@
+import errno
 import socket
 import socket as sock
 import netifaces
@@ -10,13 +11,11 @@ import time
 clients_dict = {}
 last_connection_time = float('inf')
 time_lock = threading.Lock()
-# clients_lock = threading.Lock()
 server_name = "Trivia King"
 trivia_topic = "The Olympics"
 trivia_questions_path = "olympics_trivia_questions.json"
 
 
-# ------------- CHECKED ----------------
 def load_trivia_questions(file_path):
     """
     Loads trivia questions from a JSON file.
@@ -65,7 +64,6 @@ def handle_socket_error(exception, function):
     print(f"{yellow_text_color}Error Details: {error_message}{reset_color}")
 
 
-# ------------- CHECKED ----------------
 def get_local_ip():
     """
     Retrieves the local IP address of the machine by creating a dummy UDP connection.
@@ -81,16 +79,12 @@ def get_local_ip():
     return ip
 
 
-# ------------- CHECKED ----------------
 def get_default_broadcast():
     """
     Retrieves the default broadcast address for the default network interface.
 
     Returns:
         str: The broadcast address of the default network interface.
-
-    Raises:
-        ValueError: If no default gateway or broadcast address is found.
     """
     try:
         # Retrieve the default gateway details for IPv4 connections
@@ -106,7 +100,6 @@ def get_default_broadcast():
         handle_socket_error(e, "get_default_broadcast")
 
 
-# ------------- CHECKED ----------------
 def find_free_port():
     """
     Finds and returns an available network port on the local machine by asking the OS to assign a free port.
@@ -120,7 +113,6 @@ def find_free_port():
         return assigned_port
 
 
-# ------------- CHECKED ----------------
 def udp_broadcast(server_name, server_port, stop_event):
     """
     Continuously broadcasts UDP packets containing server information until a stop event is triggered.
@@ -146,7 +138,6 @@ def udp_broadcast(server_name, server_port, stop_event):
             time.sleep(2)  # Sleep to manage loop frequency and reduce network congestion
 
 
-# ------------- CHECKED ----------------
 def save_client_info(client_socket, client_address):
     """
     Receives data from a client socket to update global client records.
@@ -159,6 +150,7 @@ def save_client_info(client_socket, client_address):
         client_address (tuple): The client's address.
 
     Globals:
+        clients_dict (dict): Records of connected clients.
         last_connection_time (float): Timestamp of the last client interaction.
     """
     global last_connection_time
@@ -182,7 +174,6 @@ def save_client_info(client_socket, client_address):
             handle_socket_error(e, "save_client_info")
 
 
-# ------------- CHECKED ----------------
 def watch_for_inactivity(stop_event, timeout=10):
     """
     Monitors the time elapsed since the last client interaction and sets a stop event
@@ -217,7 +208,7 @@ def tcp_listener(server_port, stop_event):
     global last_connection_time
     while not stop_event.is_set():
         try:
-            client_socket, client_address = server_socket.accept()  # blocking method to accept new connection. if it waits here more than 10sec it will go to except
+            client_socket, client_address = server_socket.accept()  # blocking method to accept new connection
             print(f"\n\033[32mAccepted\033[0m a connection from {client_address}")
             threading.Thread(target=save_client_info, args=(client_socket, client_address)).start()
             threading.Thread(target=watch_for_inactivity, args=(stop_event,)).start()
@@ -227,10 +218,9 @@ def tcp_listener(server_port, stop_event):
                 continue
             else:
                 handle_socket_error(e, "tcp_listening")
-        continue  # if a client already connected while waiting for another one, the stop event will be true here. if nobody connected we will just keep waiting
+        continue  # if a client already connected while waiting for another one, the stop event will be true here
 
 
-# ------------- CHECKED ----------------
 def welcome_message(server_name, trivia_topic):
     """
     Sends a welcome message to all connected clients.
@@ -238,17 +228,7 @@ def welcome_message(server_name, trivia_topic):
     Args:
         server_name (str): Name of the server.
         trivia_topic (str): Topic for the trivia session.
-
-    Returns:
-        int: -1 if no clients are connected, otherwise returns None.
     """
-
-    # if not clients_dict:
-    #     print("No clients connected to the server.")
-    #     return -1
-    # Create a formatted welcome message with instructions
-    print("in================================")
-    time.sleep(5)
     instructions = "Please respond to each question by typing '1', 't', or 'y' for True and '0', 'f', or 'n' for False."
     message = f"\nWelcome to the {server_name} server, where we are answering trivia questions about {trivia_topic}.\n{instructions}\n"
     # Append each client's name to the message
@@ -268,7 +248,6 @@ def welcome_message(server_name, trivia_topic):
         print(message)
 
 
-# ------------- CHECKED ----------------
 def send_trivia_question(questions) -> bool:
     """
     Sends a randomly selected trivia question to all connected clients.
@@ -296,7 +275,6 @@ def send_trivia_question(questions) -> bool:
     return trivia_answer
 
 
-# ------------- CHECKED ----------------
 def get_answer_from_client(client_socket, client_address, trivia_sending_time):
     """
     Receives and processes the trivia answer from a connected client, logging their response time.
@@ -305,6 +283,9 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
         client_socket (socket.socket): The socket through which the client is connected.
         client_address (tuple): The address of the client.
         trivia_sending_time (float): The timestamp when the trivia question was sent.
+
+    Globals:
+        clients_dict (dict): A dictionary containing client information.
     """
     client_socket.settimeout(15)
     try:
@@ -342,6 +323,9 @@ def get_all_answers(trivia_sending_time: float):
 
     Args:
         trivia_sending_time (float): The timestamp when the trivia question was sent.
+
+    Globals:
+        clients_dict (dict): A dictionary containing the socket and other details for each client.
     """
     list_of_threads = []
     for client_address, client_info in clients_dict.items():
@@ -367,7 +351,6 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
     Returns:
         tuple | None: The address of the winning client, or None if no correct answers were given.
     """
-
     min_timestamp = float('inf')
     winner = None
     for client_address in clients_dict.keys():
@@ -383,7 +366,7 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
 
 
 def send_winner_message(winner_address):
-    """Sends a message to all clients announcing the winner of the trivia round or that no correct answers were received.
+    """Sends a message to all clients announcing the winner of the trivia round or that no correct answers were received
 
     Args:
         winner_address (tuple | None): The address of the winning client, or None if no winner.
@@ -402,7 +385,16 @@ def send_winner_message(winner_address):
             continue
 
 
-def send_statistics_to_all_clients(correct_answer):
+def build_statistics_table():
+    """
+    Constructs a statistics table from client data.
+
+    Globals:
+        clients_dict (dict): A dictionary containing the socket and other details for each client.
+
+    Returns:
+        str: A formatted table with client statistics.
+    """
     headers = ["Player Name", "Answer", "Time"]
     table_data = []
 
@@ -416,7 +408,6 @@ def send_statistics_to_all_clients(correct_answer):
             else:
                 client_answer = "No answer"
             client_time = info['answers_times'][-1]
-            # average_time = total_time / count_times if count_times > 0 else 0
             # Append player data to the table list
             table_data.append([name, client_answer, f"{client_time:.2f} seconds"])
 
@@ -427,6 +418,11 @@ def send_statistics_to_all_clients(correct_answer):
     title = "Game Statistics:"
     # Prepending the title centered with newline for separation
     formatted_table = f"\n{title}\n{stats_table}\n"
+    return formatted_table
+
+
+def send_statistics_to_all_clients():
+    formatted_table = build_statistics_table()
 
     # Encode and send
     stats_message_encoded = formatted_table.encode('utf-8')
@@ -457,7 +453,6 @@ def close_all_client_sockets():
     clients_dict.clear()
 
 
-# new code
 def client_handler(client_socket, client_address):
     """
     Handles incoming data from a connected client. If the client disconnects or an error occurs,
@@ -514,17 +509,20 @@ def is_client_alive(sock):
         bool: True if the socket is active, False otherwise.
     """
     try:
-        # this is a non-blocking call
-        sock.setblocking(0)
-        data = sock.recv(16)
-        sock.setblocking(1)
-        if not data:
-            return False
-        return True
+        sock.setblocking(False)  # Ensure non-blocking mode is set
+        data = sock.recv(16)   # Attempt to read a small amount of data
+        sock.setblocking(True)  # Reset to blocking mode if necessary
+
+        return bool(data)  # If data is received, socket is active; if not, it's still open but idle
+
     except BlockingIOError:
-        return True  # No data, but still connected
-    except Exception:
-        return False
+        # No data, but still connected
+        return True
+    except (socket.error, Exception) as e:
+        # Handle specific socket errors and general exceptions to determine if the socket is closed
+        if isinstance(e, socket.error) and e.errno == errno.ECONNRESET:
+            return False
+        return False  # Assume any other exception means the socket is not active
 
 
 def remove_client(client_address):
@@ -610,7 +608,7 @@ def game_loop():
             send_winner_message(winner_client_address)
 
             # Send game statistics to all clients
-            send_statistics_to_all_clients(clients_dict)
+            send_statistics_to_all_clients()
             print("Round ends")
 
         except KeyboardInterrupt:
