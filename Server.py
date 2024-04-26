@@ -486,6 +486,14 @@ def client_handler(client_socket, client_address):
 
 
 def monitor_clients():
+    """
+    Continuously checks the health of client connections and removes any clients that have
+    disconnected. This function runs in a separate thread to ensure active monitoring without
+    blocking other server operations.
+
+    Usage:
+        Should be run in a daemon thread to continually monitor client status.
+    """
     while True:
         time.sleep(3)
 
