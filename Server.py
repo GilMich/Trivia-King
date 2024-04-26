@@ -6,13 +6,17 @@ import netifaces
 import random
 from tabulate import tabulate
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 clients_dict = {}
 last_connection_time = float('inf')
 time_lock = threading.Lock()
-clients_lock = threading.Lock()
+# clients_lock = threading.Lock()
 server_name = "Trivia King"
 trivia_topic = "The Olympics"
+trivia_questions_path = "olympics_trivia_questions.json"
 
 
 # ------------- CHECKED ----------------
@@ -240,25 +244,30 @@ def welcome_message(server_name, trivia_topic):
     Returns:
         int: -1 if no clients are connected, otherwise returns None.
     """
-    if not clients_dict:
-        print("No clients connected to the server.")
-        return -1
 
+    # if not clients_dict:
+    #     print("No clients connected to the server.")
+    #     return -1
     # Create a formatted welcome message with instructions
+    print("in================================")
+    time.sleep(5)
     instructions = "Please respond to each question by typing '1', 't', or 'y' for True and '0', 'f', or 'n' for False."
     message = f"\nWelcome to the {server_name} server, where we are answering trivia questions about {trivia_topic}.\n{instructions}\n"
-
     # Append each client's name to the message
     for index, (address, client_info) in enumerate(clients_dict.items(), start=1):
         message += f"Player {index}: {client_info['name']}\n"
-
     # Encode the message once
     message_encoded = message.encode('utf-8')
 
     # Send the encoded message to all clients
     for client in clients_dict.values():
-        client["socket"].sendall(message_encoded)
-    print(message)
+        try:
+            client["socket"].sendall(message_encoded)
+        except sock.error as e:
+            print(f"Failed to send message to {client['name']} due to a socket error: {e}")
+
+    if clients_dict:
+        print(message)
 
 
 # ------------- CHECKED ----------------
@@ -466,6 +475,7 @@ def client_handler(client_socket, client_address):
 def monitor_clients():
     while True:
         time.sleep(3)
+
         for client_address, client_info in list(clients_dict.items()):
             if not is_client_alive(client_info['socket']):
                 remove_client(client_address)
@@ -482,7 +492,6 @@ def is_client_alive(sock) -> bool:
         return True
     except BlockingIOError:
         return True  # No data, but still connected
-
     except Exception:
         return False
 
@@ -499,77 +508,91 @@ def remove_client(client_address):
         print(f"\033[31mRemoved\033[0m client {client_address} from active clients.")
 
 
-# def game_loop():
-#     threading.Thread(target=monitor_clients, daemon=True).start()
-#
 # check why its not working with stop_event.wait(timeout=10) instead of time.sleep(10)
-if __name__ == "__main__":
+def game_loop():
+    """
+    Coordinates the main game operations of a trivia game server, including question loading, server broadcasting,
+    client management, trivia round execution, and cleanup activities.
+
+    This function runs in a continuous loop to handle multiple game rounds and ensures graceful shutdown
+    on keyboard interrupts or other stop signals. It actively monitors client connectivity,
+    terminating rounds early if clients disconnect during critical stages of gameplay.
+    """
+    global last_connection_time
+
+    # Start a daemon thread to monitor client connections and handle disconnections
     threading.Thread(target=monitor_clients, daemon=True).start()
+    stop_event = udp_thread = tcp_thread = None
 
     while True:
-        last_connection_time = float('inf')
         try:
-            questions = load_trivia_questions("olympics_trivia_questions.json")
-        except Exception as e:
-            print(f"Failed to load questions: {e}")
-            break
-        server_port = find_free_port()
-        print(f"Server started, listening on IP address: {get_local_ip()}")
-        stop_event = threading.Event()
-        # clients_dict = {}
+            questions = load_trivia_questions(trivia_questions_path)
+            # Find an available network port
+            server_port = find_free_port()
+            print(f"Server started, listening on IP address: {get_local_ip()}")
+            # Create an event to signal when to stop the server operations
+            stop_event = threading.Event()
 
-        udp_thread = threading.Thread(target=udp_broadcast, args=(server_name, server_port, stop_event))
-        tcp_thread = threading.Thread(target=tcp_listener, args=(server_port, stop_event))
+            # Start UDP and TCP server threads for broadcasting and listening for client connections
+            udp_thread = threading.Thread(target=udp_broadcast, args=(server_name, server_port, stop_event))
+            tcp_thread = threading.Thread(target=tcp_listener, args=(server_port, stop_event))
+            udp_thread.start()
+            tcp_thread.start()
 
-        # Start threads
-        udp_thread.start()
-        tcp_thread.start()
-
-        try:
-            # Wait for the stop_event to be set
+            # Wait until the stop event is triggered or manually stopped
             while not stop_event.is_set():
-                time.sleep(1)  # Reduced wait timeout for more responsive handling
+                time.sleep(1)
 
-            if not any(client['is_client_active'] for client in clients_dict.values()):
+            # Check if clients are connected; skip round if no clients are present
+            if not clients_dict:
                 continue
 
-            # if any(client['currently_listening_to_client'] for client in clients_dict.values()):
-            # print("clients dict stat: ", clients_dict)
-            print("Starting new game round...")
-            udp_thread.join()
-            tcp_thread.join()
+            print("Starting new game...")
+            welcome_message(server_name, trivia_topic)
+            if not clients_dict:  # Check after sending welcome message
+                print("No clients connected after welcome message. Ending the round early.")
+                continue
 
-            return_value_welcome = welcome_message(server_name, trivia_topic)
-            # if return_value_welcome == -1:
-            #     continue
             correct_answer = send_trivia_question(questions)
-            time.sleep(1)  # Adjust timing as needed
+            if not clients_dict:  # Check after sending trivia question
+                print("No clients connected after sending trivia question. Ending the round early.")
+                continue
+
+            # Record the time when the question was sent to measure response times and then collect answers from clients
             trivia_sending_time = time.time()
             get_all_answers(trivia_sending_time)
-            time.sleep(1)
+            if not clients_dict:  # Check after getting answers
+                print("No clients connected after collecting answers. Ending the round early.")
+                continue
+
+            # Determine the winner of the trivia round and send the winning message to all clients
             winner_client_address = calculate_winner(correct_answer)
             send_winner_message(winner_client_address)
-            send_statistics_to_all_clients(clients_dict)  # Call after a round to update clients
-            time.sleep(1)  # Adjust timing as needed
-            print("Round ends")
-            # continue
 
-            close_all_client_sockets()
-            # clients_dict.clear()
-            print("Server shutdown completed.")
-            # Clearing and reinitializing for a new round
-            time.sleep(2)
+            # Send game statistics to all clients
+            send_statistics_to_all_clients(clients_dict)
+            print("Round ends")
 
         except KeyboardInterrupt:
             print("Shutting down the server.")
             stop_event.set()
-        # finally:
-        #     # Cleanup
-        #     udp_thread.join()
-        #     tcp_thread.join()
-        #
-        #     close_all_client_sockets()
-        #     # clients_dict.clear()
-        #     print("Server shutdown completed.")
-        #     # Clearing and reinitializing for a new round
-        #     time.sleep(5)
+
+        except Exception as e:
+            print(e)
+
+        finally:
+            print("in finally")
+            if udp_thread:
+                udp_thread.join()
+
+            if tcp_thread:
+                tcp_thread.join()
+
+            close_all_client_sockets()
+            last_connection_time = float('inf')
+            print("Server shutdown completed.")
+            time.sleep(2)  # Clearing and reinitializing for a new round
+
+
+if __name__ == "__main__":
+    game_loop()
