@@ -1,13 +1,10 @@
 import socket
 import socket as sock
-import threading
-import time
 import netifaces
 import random
 from tabulate import tabulate
 import json
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
 clients_dict = {}
@@ -53,7 +50,8 @@ def handle_socket_error(exception, function):
     exception: The exception instance that was raised.
     function: A string indicating the function name where the error occurred.
 
-    This function prints a detailed error message based on the type of socket exception, the operation, and the function where it happened.
+    This function prints a detailed error message based on the type of socket exception, the operation,
+    and the function where it happened.
     """
     error_type = type(exception).__name__
     error_message = str(exception)
@@ -307,9 +305,6 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
         client_socket (socket.socket): The socket through which the client is connected.
         client_address (tuple): The address of the client.
         trivia_sending_time (float): The timestamp when the trivia question was sent.
-
-    Globals:
-        clients_dict (dict): Records of connected clients, storing their answers and response times.
     """
     client_socket.settimeout(15)
     try:
@@ -445,6 +440,13 @@ def send_statistics_to_all_clients(correct_answer):
 
 
 def close_all_client_sockets():
+    """
+    Closes all client sockets and clears the client dictionary. This function is typically called
+    to clean up resources at the end of a game round or when the server is shutting down.
+
+    Globals:
+        clients_dict (dict): A dictionary of client information, including sockets.
+    """
     for client_info in clients_dict.values():
         client_socket = client_info['socket']
         if client_socket:
@@ -508,7 +510,7 @@ def remove_client(client_address):
         print(f"\033[31mRemoved\033[0m client {client_address} from active clients.")
 
 
-# check why its not working with stop_event.wait(timeout=10) instead of time.sleep(10)
+# check why it's not working with stop_event.wait(timeout=10) instead of time.sleep(10)
 def game_loop():
     """
     Coordinates the main game operations of a trivia game server, including question loading, server broadcasting,
