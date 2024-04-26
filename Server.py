@@ -272,6 +272,7 @@ def send_trivia_question(questions) -> bool:
         except Exception as e:
             # Log the error and continue to attempt to send to other clients
             handle_socket_error(e,  "sending_trivia_question")
+    print(message)
     return trivia_answer
 
 
@@ -376,13 +377,14 @@ def send_winner_message(winner_address):
         message = "No one answered correctly this time. Better luck next time!"
     else:
         winner_name = clients_dict[winner_address]["name"]
-        message = f"{winner_name} won! {winner_name} answered correctly first with a time of {clients_dict[winner_address]['answers_times'][-1]} seconds."
+        message = f"The player {winner_name} won the game! answered correctly first with a time of {clients_dict[winner_address]['answers_times'][-1]} seconds."
     for client in clients_dict.values():
         try:
             client["socket"].sendall(message.encode('utf-8'))
         except Exception as e:
             handle_socket_error(e, "send_winner_message")
             continue
+    print(message)
 
 
 def build_statistics_table():
@@ -433,6 +435,7 @@ def send_statistics_to_all_clients():
             except Exception as e:
                 info['is_client_active'] = False
                 handle_socket_error(e, "send_statistics")
+    print(formatted_table)
 
 
 def close_all_client_sockets():
@@ -612,14 +615,13 @@ def game_loop():
             print("Round ends")
 
         except KeyboardInterrupt:
-            print("Shutting down the server.")
+            print("Shutting down the server due to keyboard interrupt.")
             stop_event.set()
 
         except Exception as e:
             print(e)
 
         finally:
-            print("in finally")
             if udp_thread:
                 udp_thread.join()
 
