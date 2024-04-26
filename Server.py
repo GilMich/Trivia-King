@@ -459,6 +459,17 @@ def close_all_client_sockets():
 
 # new code
 def client_handler(client_socket, client_address):
+    """
+    Handles incoming data from a connected client. If the client disconnects or an error occurs,
+    the client is removed from the server.
+
+    Args:
+        client_socket (socket.socket): The socket object for the client.
+        client_address (tuple): The address of the client.
+
+    Cleanup:
+        Closes the client socket and removes the client from the server's client list.
+    """
     try:
         while True:
             data = client_socket.recv(1024)
