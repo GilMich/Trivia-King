@@ -503,6 +503,16 @@ def monitor_clients():
 
 
 def is_client_alive(sock) -> bool:
+    """
+    Checks if a client socket is still active by attempting a non-blocking read.
+    Returns True if the socket is active, or False if it is not.
+
+    Args:
+        sock (socket.socket): The socket to check.
+
+    Returns:
+        bool: True if the socket is active, False otherwise.
+    """
     try:
         # this is a non-blocking call
         sock.setblocking(0)
