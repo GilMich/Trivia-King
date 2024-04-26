@@ -502,7 +502,7 @@ def monitor_clients():
                 remove_client(client_address)
 
 
-def is_client_alive(sock) -> bool:
+def is_client_alive(sock):
     """
     Checks if a client socket is still active by attempting a non-blocking read.
     Returns True if the socket is active, or False if it is not.
@@ -528,6 +528,15 @@ def is_client_alive(sock) -> bool:
 
 
 def remove_client(client_address):
+    """
+    Removes a client from the server's list of active clients and closes their socket.
+
+    Args:
+        client_address (tuple): The address of the client to remove.
+
+    Globals:
+        clients_dict (dict): A dictionary of client information, used to manage connected clients.
+    """
     if client_address in clients_dict:
         client_info = clients_dict.pop(client_address, None)
         if client_info and client_info['socket']:
