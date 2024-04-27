@@ -114,18 +114,23 @@ def print_welcome_message(server_tcp_socket):
         raise Exception(f"An unexpected error {type(e).__name__} occurred while trying to receive the welcome message.")
 
 
-
 def print_trivia_question(server_tcp_socket):
+    """
+    Receives and prints the trivia question from the server.
+
+    Args:
+        server_tcp_socket (socket.socket): The TCP socket connected to the server.
+    """
     try:
         message_encoded = server_tcp_socket.recv(1024)
         if not message_encoded:
-            raise sock.error("Server closed connection")
+            raise ConnectionError("Server closed the connection unexpectedly.")
+
         message_decoded = message_encoded.decode('utf-8')
         print(message_decoded)
-    except sock.error as e:
-        handle_socket_error(e, "receiving trivia question", "print_trivia_question")
-        return False  # Return False if an error occurred
-    return True
+    except (sock.error, ConnectionError) as e:
+        print_red(f"Error occurred due to server disconnection or crash while trying to receive trivia question.")
+        raise
 
 
 def get_input(input_queue, valid_keys, stop_event):
