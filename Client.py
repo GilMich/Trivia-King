@@ -94,14 +94,25 @@ def connect_to_server(server_ip, server_port):
 
 
 def print_welcome_message(server_tcp_socket):
+    """
+    Receives and prints the welcome message from the server.
+
+    Args:
+        server_tcp_socket (socket.socket): The TCP socket connected to the server.
+    """
     try:
         message_encoded = server_tcp_socket.recv(1024)
+        if not message_encoded:
+            raise ConnectionError("Server disconnected, no data received.")
+
         message_decoded = message_encoded.decode('utf-8')
         print(message_decoded)
-    except sock.error as e:
-        handle_socket_error(e, "receiving welcome message", "print_welcome_message")
-        return False  # Return False if an error occurred
-    return True
+    except (ConnectionResetError, OSError) as e:
+        print_red(f"Error occurred due to server disconnection or crash while trying to receive the welcome message.")
+        raise
+    except Exception as e:
+        raise Exception(f"An unexpected error {type(e).__name__} occurred while trying to receive the welcome message.")
+
 
 
 def print_trivia_question(server_tcp_socket):
