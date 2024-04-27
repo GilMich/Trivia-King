@@ -7,38 +7,8 @@ import threading
 import queue
 
 
-def handle_socket_error(exception, operation, function):
-    """
-    Handles exceptions raised during socket operations.
-
-    Args:
-    exception: The exception instance that was raised.
-    operation: A string describing the socket operation during which the error occurred.
-    function: A string indicating the function name where the error occurred.
-
-    This function prints a detailed error message based on the type of socket exception, the operation, and the function where it happened. All messages are printed in red.
-    """
-    error_type = type(exception).__name__
-    error_message = str(exception)
-
-    # Function to print messages in red
-    def print_red(message):
-        print(f"\033[31m{message}\033[0m")
-
-    print_red(f"Error occurred in function '{function}' during {operation}.")
-    print_red(f"Error Type: {error_type}")
-    print_red(f"Error Details: {error_message}")
-
-    if isinstance(exception, sock.timeout):
-        print_red("This was a timeout error. Please check network conditions and retry.")
-    elif isinstance(exception, sock.error):
-        print_red("A general socket error occurred. Please check the socket operation and parameters.")
-    elif isinstance(exception, sock.gaierror):
-        print_red("An address-related error occurred. Please verify the network address details.")
-    elif isinstance(exception, sock.herror):
-        print_red("A host-related error occurred. Check DNS configurations and host availability.")
-    else:
-        print_red("An unexpected type of error occurred. Please consult system logs or network settings.")
+def print_red(message):
+    print(f"\033[31m{message}\033[0m")
 
 
 def unpack_packet(data):
@@ -93,24 +63,34 @@ def looking_for_a_server():
 
 
 def connect_to_server(server_ip, server_port):
+    """
+    Establishes a TCP connection to the trivia game server at the specified IP address and port.
+
+    Args:
+        server_ip (str): The IP address of the server.
+        server_port (int): The port number on which the server is listening.
+
+    Returns:
+        socket.socket: The connected TCP socket if successful, or None if the connection fails.
+    """
     # Create a TCP/IP socket
     tcp_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
-    # try:
-    # Connect the socket to the server's address and port
-    tcp_socket.connect((server_ip, server_port))
-    print(f"Successfully connected to the server at {server_ip}:{server_port}")
+    try:
+        # Connect the socket to the server's address and port
+        tcp_socket.connect((server_ip, server_port))
+    except OSError as e:
+        print(f"A {type(e)} occurred while trying to connect to the server with tcp: {e}\n")
 
+    print(f"Successfully connected to the server at {server_ip}:{server_port} \n")
     # Immediately sends the player name after the connection is established
     player_name = input("Please enter your name: ")
     name_message = f"{player_name}\n"
-    tcp_socket.sendall(name_message.encode())
-    return tcp_socket
+    try:
+        tcp_socket.sendall(name_message.encode())
+    except OSError as e:
+        print(f"A {type(e)} occurred while sending the player name: {e}\n")
 
-    # except sock.error as e:
-    #     handle_socket_error(e, "connect to server", "connect_to_server")
-    #     if tcp_socket:
-    #         tcp_socket.close()  # Ensure the socket is closed if an error occurs
-    #     return None
+    return tcp_socket
 
 
 def print_welcome_message(server_tcp_socket):
@@ -154,7 +134,6 @@ def get_input(input_queue, valid_keys, stop_event):
             print(f"General error during user input: {e}")
             stop_event.set()  # Signal to end this thread for any other issues
             break
-
 
 
 def get_answer_from_user() -> bool | None:
@@ -219,7 +198,6 @@ def print_message_from_server(server_tcp_socket):
 
 
 
-# Main client function
 if __name__ == "__main__":
     server_tcp_socket = None
     while True:
@@ -244,31 +222,12 @@ if __name__ == "__main__":
             print_message_from_server(server_tcp_socket)  # Stats message
 
         except KeyboardInterrupt:
-            print("Client is shutting down due to a keyboard interrupt.")
+            print_red("Client is shutting down due to a keyboard interrupt.")
             break
         except Exception as e:
-            print("Error:", e)
+            print_red(f"Error details: {e}")
         finally:
             if server_tcp_socket:
                 server_tcp_socket.close()
                 print("Disconnected from the server.")
-            time.sleep(5)  # Wait before trying to connect again
-        # time.sleep(5)  # Adjust timing as needed
-
-        # if not print_welcome_message(server_tcp_socket) or not print_trivia_question(server_tcp_socket):
-        #     if server_tcp_socket:
-        #         server_tcp_socket.close()
-        #     server_tcp_socket = None
-        #     continue  # Skip further actions and attempt to reconnect
-        #
-        # user_answer = get_answer_from_user()
-        # if not send_answer_to_server(server_tcp_socket, user_answer):
-        #     if server_tcp_socket:
-        #         server_tcp_socket.close()
-        #     server_tcp_socket = None  # Reset the connection
-
-        # if server_tcp_socket:
-        #     server_tcp_socket.close()
-        #     print("Disconnected from the server.")
-
-    # todo missing function to send the answer to the server
+            time.sleep(2)  # Wait before trying to connect again
