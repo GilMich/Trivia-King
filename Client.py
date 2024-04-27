@@ -134,22 +134,30 @@ def print_trivia_question(server_tcp_socket):
 
 
 def get_input(input_queue, valid_keys, stop_event):
+    """
+    Collects user input in a loop until a valid key is entered or a stop event is set.
+
+    Args:
+        input_queue (queue.Queue): The queue to which valid inputs are added.
+        valid_keys (list[str]): A list of strings that are considered valid inputs.
+        stop_event (threading.Event): An event that, when set, will break the loop and stop the function.
+    """
+
     while not stop_event.is_set():
         try:
             user_input = input("Enter your response: ")
             if user_input in valid_keys:
                 input_queue.put(user_input)
                 break
-            else:
-                print("Invalid input. Please try again.")
+            print("Invalid input. Please try again.")
         except UnicodeDecodeError as ude:
-            print(f"Unicode decode error during user input: {ude}")
+            print_red("Unicode decode error during user input")
             stop_event.set()  # Signal to end this thread due to input issues
-            break
+            raise
         except Exception as e:
-            print(f"General error during user input: {e}")
+            print_red("General error during user input.")
             stop_event.set()  # Signal to end this thread for any other issues
-            break
+            raise
 
 
 def get_answer_from_user() -> bool | None:
