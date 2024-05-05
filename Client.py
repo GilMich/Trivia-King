@@ -41,8 +41,19 @@ def unpack_packet(data):
         return None
     
 
-# UDP Listener for server broadcast
 def looking_for_a_server():
+    """
+    Listens for UDP broadcasts to discover available trivia game servers. It binds to a specific port
+    to receive server details such as server name, IP, and port.
+
+    This function checks for issues like address already in use or invalid broadcast messages (wrong magic cookie or message type),
+    and handles exceptions for socket operations and timeouts.
+
+    Returns:
+        tuple: Returns server details (name, IP, port) if a valid broadcast is received, otherwise None.
+        None: Returned in case of errors such as socket binding issues, timeouts, or invalid data.
+    """
+
     print("Client started, listening for offer requests...")
     udp_socket = sock.socket(sock.AF_INET, sock.SOCK_DGRAM)
     udp_socket.setsockopt(sock.SOL_SOCKET, sock.SO_REUSEADDR, 1)
