@@ -52,16 +52,17 @@ def handle_socket_error(exception, function):
     This function prints a detailed error message based on the type of socket exception, the operation,
     and the function where it happened.
     """
+
+    # Function to print messages in red with ANSI
+    def print_red(message):
+        print(f"\033[31m{message}\033[0m")
+
     error_type = type(exception).__name__
     error_message = str(exception)
 
-    # ANSI escape code for yellow
-    yellow_text_color = '\033[93m'
-    reset_color = '\033[0m'  # Reset to default terminal color
-
-    print(f"{yellow_text_color}Error in: '{function}' function{reset_color} ")
-    print(f"{yellow_text_color}Error Type: {error_type}{reset_color}")
-    print(f"{yellow_text_color}Error Details: {error_message}{reset_color}")
+    print_red(f"Error in: '{function}' function ")
+    print_red(f"Error Type: {error_type}")
+    print_red(f"Error Details: {error_message}")
 
 
 def get_local_ip():
@@ -271,7 +272,7 @@ def send_trivia_question(questions) -> bool:
             client["socket"].sendall(message.encode('utf-8'))
         except Exception as e:
             # Log the error and continue to attempt to send to other clients
-            handle_socket_error(e,  "sending_trivia_question")
+            handle_socket_error(e, "sending_trivia_question")
     print(message)
     return trivia_answer
 
@@ -513,7 +514,7 @@ def is_client_alive(sock):
     """
     try:
         sock.setblocking(False)  # Ensure non-blocking mode is set
-        data = sock.recv(16)   # Attempt to read a small amount of data
+        data = sock.recv(16)  # Attempt to read a small amount of data
         sock.setblocking(True)  # Reset to blocking mode if necessary
 
         return bool(data)  # If data is received, socket is active; if not, it's still open but idle

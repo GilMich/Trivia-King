@@ -12,23 +12,34 @@ def print_red(message):
 
 
 def unpack_packet(data):
-    # Define the format string for unpacking the packet
-    # '>'  stands for big-endian, meaning the first decoded part of the packet will be stored in the first variable basically meaning that encoding happens from left to right
+    """
+    Unpacks a server broadcast packet according to a predefined structure.
+    The format string for unpacking the packet:
+    '>'  stands for big-endian, meaning the first decoded part of the packet will be stored in the first variable basically meaning that encoding happens from left to right
+    'I' for the 4-byte magic cookie
+    'B' for the 1-byte message type
+    '32s' for the 32-byte server name
+    'H' for the 2-byte port number
+    
+    Args:
+        data (bytes): The raw bytes received from the UDP broadcast.
 
-    # 'I' for the 4-byte magic cookie
-    # 'B' for the 1-byte message type
-    # '32s' for the 32-byte server name
-    # 'H' for the 2-byte port number
-    packet_format = '>IB32sH'
-
-    # Unpack the data according to the specified format
-    magic_cookie, message_type, server_name_raw, server_port = struct.unpack(packet_format, data)
-
-    # Decode the server name to a string, stripping null bytes
-    server_name = server_name_raw.decode().strip('\x00 ')
-
-    return magic_cookie, message_type, server_name, server_port
-
+    Returns:
+        tuple: A tuple containing the unpacked magic_cookie, message_type, server_name, and server_port.
+               Returns None if unpacking fails due to incorrect data format.
+    """
+    packet_format = '>IB32sH'  # Big-endian: int, byte, 32-byte string, short
+    try:
+        magic_cookie, message_type, server_name_raw, server_port = struct.unpack(packet_format, data)
+        server_name = server_name_raw.decode('utf-8').strip('\x00')  # Decode and strip null bytes
+        return magic_cookie, message_type, server_name, server_port
+    except struct.error as e:
+        print(f"Failed to unpack data due to: {e}")
+        return None
+    except UnicodeDecodeError as ude:
+        print(f"Failed to decode server name: {ude}")
+        return None
+    
 
 # UDP Listener for server broadcast
 def looking_for_a_server():
