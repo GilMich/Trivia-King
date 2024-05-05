@@ -222,17 +222,30 @@ def send_answer_to_server(server_tcp_socket, user_answer):
 
 
 def print_message_from_server(server_tcp_socket):
+    """
+    Receives and prints a message from the server.
+
+    Args:
+        server_tcp_socket (socket.socket): The TCP socket connected to the server.
+    """
     try:
         message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary
         if not message_encoded:
-            print("Server has disconnected.")
-            return None
-        message = message_encoded.decode('utf-8')
-        print(message)
-    except sock.error as e:
-        print(f"Error receiving message from server: {e}")
-        return None
+            raise ConnectionError("Server closed the connection unexpectedly.")
 
+        message_decoded = message_encoded.decode('utf-8')
+        print(message_decoded)
+    except sock.error:
+        print_red("Error receiving message from server.")
+        raise
+    except UnicodeDecodeError:
+        # Specific exception for issues during the decoding process
+        print_red("Unicode decode error.")
+        raise
+    except Exception:
+        # A generic exception handler for any other unforeseen exceptions
+        print_red(f"An unexpected error occurred while trying print message from server.")
+        raise
 
 
 if __name__ == "__main__":
