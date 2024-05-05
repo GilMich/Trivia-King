@@ -199,8 +199,12 @@ def get_answer_from_user() -> bool | None:
 
 def send_answer_to_server(server_tcp_socket, user_answer):
     """
-    Sends the user's answer to the server and checks if the operation was successful.
-    Returns True if the message was sent successfully, False otherwise.
+    Sends the user's answer to the server. This function handles the transmission of the user's
+    answer as a string representation of boolean values 'true', 'false', or 'none' for undefined.
+
+    Args:
+        server_tcp_socket (socket.socket): The TCP socket connected to the server.
+        user_answer (bool | None): The user's answer as a boolean or None if no answer was provided.
     """
     try:
         # Prepare the message
