@@ -206,21 +206,19 @@ def send_answer_to_server(server_tcp_socket, user_answer):
         server_tcp_socket (socket.socket): The TCP socket connected to the server.
         user_answer (bool | None): The user's answer as a boolean or None if no answer was provided.
     """
-    try:
-        # Prepare the message
-        if user_answer is None:
-            message = "none"
-        elif user_answer:
-            message = "true"
-        else:
-            message = "false"
+    # Define the message based on the user's answer
+    if user_answer is True:
+        message = "true"
+    elif user_answer is False:
+        message = "false"
+    else:
+        message = "none"  # This handles None or any other unexpected value
 
-        # Send the message
-        server_tcp_socket.sendall(message.encode())
-        return True
-    except sock.error as e:
-        handle_socket_error(e, "sending answer", "send_answer_to_server")
-        return False
+    try:
+        server_tcp_socket.sendall(message.encode('utf-8'))
+    except sock.error:
+        print_red(f"Failed to send answer to server.")
+        raise
 
 
 def print_message_from_server(server_tcp_socket):
