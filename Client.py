@@ -50,23 +50,26 @@ def looking_for_a_server():
         udp_socket.bind(('', 13117))
     except OSError as e:
         if e.errno == errno.EADDRINUSE:
-            print("This port is already in use by a different process! trying to bind again...")
-            return -1
+            print("Error while binding the socket: Address already in use. Please try again later.")
+            return None
         else:
             print("An unrecognized error has occurred during binding, trying to bind again...")
-            return -2
-
-    # Blocking method! it won't reach the next line until it detects a broadcast
-    data, addr = udp_socket.recvfrom(1024)
+            return None
+    
+    try:
+        # Blocking method. it won't reach the next line until it detects a broadcast
+        data, addr = udp_socket.recvfrom(1024)
+    except sock.timeout as t:
+        print("timeout receiving udp data packet from the server!")
+        return None
+    
     magic_cookie, message_type, server_name, server_port = unpack_packet(data)
-
     if magic_cookie != 0xabcddcba:
-        print("No Magic cookie, nice try hacker!")
-        return -3
-
+        print("Invalid magic cookie in udp packet! nice try hacker!")
+        return None
     if message_type != 0x2:
-        print("wtf this is not an offer message!")
-        return -4
+        print("Invalid message type in udp packet!")
+        return None
 
     server_ip = addr[0]
     print(f'Received offer from server "{server_name}" at address {addr[0]}, attempting to connect...')
