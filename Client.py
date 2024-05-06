@@ -132,6 +132,7 @@ def print_welcome_message(server_tcp_socket):
 
         message_decoded = message_encoded.decode('utf-8')
         print(message_decoded)
+        return True
     except (ConnectionResetError, OSError) as e:
         print_red(f"Error occurred due to server disconnection or crash while trying to receive the welcome message.")
         raise
@@ -148,11 +149,13 @@ def print_trivia_question(server_tcp_socket):
     """
     try:
         message_encoded = server_tcp_socket.recv(1024)
+
         if not message_encoded:
             raise ConnectionError("Server closed the connection unexpectedly.")
 
         message_decoded = message_encoded.decode('utf-8')
         print(message_decoded)
+        return True
     except (sock.error, ConnectionError) as e:
         print_red(f"Error occurred due to server disconnection or crash while trying to receive trivia question.")
         raise
