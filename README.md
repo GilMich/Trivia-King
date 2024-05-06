@@ -1,5 +1,7 @@
 # Trivia-King
-Final Project Introduction to Data Communication
+**Final Project in the course: Introduction to Data Communication**
+
+![image](https://github.com/GilMich/Trivia-King/assets/102687012/6b2f581c-c116-4f60-bf14-4416f0b61e4c)
 
 **Trivia King** is a trivia game server that allows clients to connect and participate in trivia games themed around the Olympics. This server manages game sessions, sends trivia questions, receives client responses, and calculates game statistics and winners.
 
