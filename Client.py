@@ -39,7 +39,7 @@ def unpack_packet(data):
     except UnicodeDecodeError as ude:
         print(f"Failed to decode server name: {ude}")
         return None
-    
+
 
 def looking_for_a_server():
     """
@@ -66,14 +66,14 @@ def looking_for_a_server():
         else:
             print("An unrecognized error has occurred during binding, trying to bind again...")
             return None
-    
+
     try:
         # Blocking method. it won't reach the next line until it detects a broadcast
         data, addr = udp_socket.recvfrom(1024)
     except sock.timeout as t:
         print("timeout receiving udp data packet from the server!")
         return None
-    
+
     magic_cookie, message_type, server_name, server_port = unpack_packet(data)
     if magic_cookie != 0xabcddcba:
         print("Invalid magic cookie in udp packet! nice try hacker!")
@@ -113,7 +113,7 @@ def connect_to_server(server_ip, server_port):
     try:
         tcp_socket.sendall(name_message.encode())
     except OSError as e:
-        print(f"A {type(e)} occurred while sending the player name: {e}\n")
+        print_red(f"A Connection Reset Error occurred while sending the player name: {e}\n")
 
     return tcp_socket
 
@@ -181,7 +181,7 @@ def get_input(input_queue, valid_keys, stop_event):
         except UnicodeDecodeError as ude:
             print_red("Unicode decode error during user input")
             stop_event.set()  # Signal to end this thread due to input issues
-            raise
+            return False
         except Exception as e:
             print_red("General error during user input.")
             stop_event.set()  # Signal to end this thread for any other issues
@@ -196,6 +196,8 @@ def get_answer_from_user() -> bool | None:
 
     input_queue = queue.Queue()
     input_thread = threading.Thread(target=get_input, args=(input_queue, valid_keys, stop_event))
+    if not input_thread:
+        return None
     input_thread.start()
 
     try:
@@ -296,5 +298,5 @@ if __name__ == "__main__":
         finally:
             if server_tcp_socket:
                 server_tcp_socket.close()
-                print("Disconnected from the server.")
+                print("Disconnected from the server.\n\n")
             time.sleep(2)  # Wait before trying to connect again
