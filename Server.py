@@ -231,7 +231,8 @@ def welcome_message(server_name, trivia_topic):
         trivia_topic (str): Topic for the trivia session.
     """
     instructions = "Please respond to each question by typing '1', 't', or 'y' for True and '0', 'f', or 'n' for False."
-    message = f"\nWelcome to the {server_name} server, where we are answering trivia questions about {trivia_topic}.\n{instructions}\n"
+    olympic_rings = get_olympic_rings()
+    message = f"\n{olympic_rings}\nWelcome to the {server_name} server, where we are answering trivia questions about {trivia_topic}.\n{instructions}\n"
     # Append each client's name to the message
     for index, (address, client_info) in enumerate(clients_dict.items(), start=1):
         message += f"Player {index}: {client_info['name']}\n"
@@ -549,6 +550,32 @@ def remove_client(client_address):
                 print(f"Error closing socket for {client_address}: {e}")
         print(f"\033[31mRemoved\033[0m client {client_address} from active clients.")
 
+def get_olympic_rings():
+    """
+    Generates a string representation of the Olympic Rings using Unicode circle characters
+    and ANSI escape codes for colored output. This creates a visually appealing representation
+    of the Olympic rings.
+
+    Returns:
+        str: A string containing the colored Olympic Rings.
+    """
+
+    olympic_rings_colored = """
+    \033[34m      ooooo\033[0m      \033[30mooooo\033[0m      \033[31mooooo\033[0m
+    \033[34m    o       o\033[0m  \033[30mo       o\033[0m  \033[31mo       o\033[0m
+    \033[34m   o         o\033[0m\033[30mo         o\033[0m\033[31mo         o\033[0m
+    \033[34m   o         o\033[0m\033[30mo         o\033[0m\033[31mo         o\033[0m
+    \033[34m    o       o\033[0m  \033[30mo       o\033[0m  \033[31mo       o\033[0m
+    \033[34m      ooooo\033[0m      \033[30mooooo\033[0m      \033[31mooooo\033[0m
+                 \033[33mooooo\033[0m      \033[32mooooo\033[0m
+               \033[33mo       o\033[0m  \033[32mo       o\033[0m
+              \033[33mo         o\033[0m\033[32mo         o\033[0m
+              \033[33mo         o\033[0m\033[32mo         o\033[0m
+               \033[33mo       o\033[0m  \033[32mo       o\033[0m
+                 \033[33mooooo\033[0m      \033[32mooooo\033[0m
+    """
+    return olympic_rings_colored
+
 
 # check why it's not working with stop_event.wait(timeout=10) instead of time.sleep(10)
 def game_loop():
@@ -631,7 +658,7 @@ def game_loop():
 
             close_all_client_sockets()
             last_connection_time = float('inf')
-            print("Server shutdown completed.")
+            print("Server shutdown completed.\n\n")
             time.sleep(2)  # Clearing and reinitializing for a new round
 
 
