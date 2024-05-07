@@ -9,21 +9,13 @@ import threading
 import time
 
 
-# Last update 18:40
-
-# Global variables
-UDP_PORT = 13117
-MAGIC_COOKIE = 0xabcddcba
-MESSAGE_TYPE = 0x2  # Offer message type
-BUFFER_SIZE = 1024
-
-server_name = "Trivia King"
-trivia_topic = "The Olympics"
-trivia_questions_path = "olympics_trivia_questions.json"
-
+# Last update 17:39
 clients_dict = {}
 last_connection_time = float('inf')
 time_lock = threading.Lock()
+server_name = "Trivia King"
+trivia_topic = "The Olympics"
+trivia_questions_path = "olympics_trivia_questions.json"
 
 
 def load_trivia_questions(file_path):
@@ -134,16 +126,42 @@ def udp_broadcast(server_name, server_port, stop_event):
     """
     broadcast_address = get_default_broadcast()
     # Message setup
+    magic_cookie = 0xabcddcba
+    message_type = 0x2  # Offer message type
     server_name_padded = server_name.ljust(32)  # Pad server name to ensure it is 32 characters
-    message = MAGIC_COOKIE.to_bytes(4, 'big') + MESSAGE_TYPE.to_bytes(1, 'big') + \
+    message = magic_cookie.to_bytes(4, 'big') + message_type.to_bytes(1, 'big') + \
               server_name_padded.encode() + server_port.to_bytes(2, 'big')
 
     # Set up and start broadcasting
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
         udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         while not stop_event.is_set():
-            udp_socket.sendto(message, (broadcast_address, UDP_PORT))
+            udp_socket.sendto(message, (broadcast_address, 13117))
             time.sleep(2)  # Sleep to manage loop frequency and reduce network congestion
+
+
+# def udp_broadcast(server_name, server_port, stop_event):
+#     print(server_name, "!")
+#     broadcast_address = get_default_broadcast()
+#     # Sets a socekt instance for udp broadcasting
+#     udp_socket = sock.socket(sock.AF_INET, sock.SOCK_DGRAM)
+#     udp_socket.setsockopt(sock.SOL_SOCKET, sock.SO_BROADCAST, 1)
+#
+#     # Prepare the message according to the specified packet format
+#     magic_cookie = 0xabcddcba
+#     message_type = 0x2  # Offer message
+#     server_name_padded = server_name.ljust(32)  # Ensure the server name is 32 characters long
+#     print(server_name_padded, "!padd")
+#
+#     message = magic_cookie.to_bytes(4, 'big') + message_type.to_bytes(1,
+#                                                                       'big') + server_name_padded.encode() + server_port.to_bytes(
+#         2, 'big')
+#
+#     # Broadcast
+#     while not stop_event.is_set():
+#         ip = get_local_ip()
+#         udp_socket.sendto(message, (broadcast_address, 13117))
+#         time.sleep(2)  # sleep to avoid busy waiting
 
 
 def save_client_info(client_socket, client_address):
@@ -164,7 +182,7 @@ def save_client_info(client_socket, client_address):
     global last_connection_time
     if client_address not in clients_dict:
         try:
-            received_data = client_socket.recv(BUFFER_SIZE)  # Adjust buffer size as needed
+            received_data = client_socket.recv(1024)  # Adjust buffer size as needed
             if not received_data:
                 e = ValueError("No data received from client.")
                 handle_socket_error(e, "save_client_info")
@@ -299,7 +317,7 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
     """
     client_socket.settimeout(15)
     try:
-        client_answer_encoded = client_socket.recv(BUFFER_SIZE)
+        client_answer_encoded = client_socket.recv(1024)
         if not client_answer_encoded:
             e = ValueError("No data received; client may have disconnected")
             raise handle_socket_error(e, "get_answer_from_client")
@@ -479,7 +497,7 @@ def client_handler(client_socket, client_address):
     """
     try:
         while True:
-            data = client_socket.recv(BUFFER_SIZE)
+            data = client_socket.recv(1024)
             if not data:
                 raise ConnectionError("Client disconnected")
             print(f"Received data from {client_address}: {data.decode()}")
