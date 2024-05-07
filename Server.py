@@ -60,9 +60,9 @@ def handle_socket_error(exception, function):
     error_type = type(exception).__name__
     error_message = str(exception)
 
-    print_red(f"Error in: '{function}' function ")
-    print_red(f"Error Type: {error_type}")
-    print_red(f"Error Details: {error_message}")
+    # print_red(f"Error in: '{function}' function ")
+    print_red(f"Error Type: {error_type}, {error_message}")
+    # print_red(f"Error Details: {error_message}")
 
 
 def get_local_ip():
@@ -376,10 +376,10 @@ def send_winner_message(winner_address):
     """
 
     if winner_address is None:
-        message = "No one answered correctly this time. Better luck next time!"
+        message = "\nNo one answered correctly this time. Better luck next time!"
     else:
         winner_name = clients_dict[winner_address]["name"]
-        message = f"The player {winner_name} won the game! answered correctly first with a time of {clients_dict[winner_address]['answers_times'][-1]} seconds."
+        message = f"\nThe player {winner_name} won the game! answered correctly first with a time of {clients_dict[winner_address]['answers_times'][-1]} seconds."
     for client in clients_dict.values():
         try:
             client["socket"].sendall(message.encode('utf-8'))
@@ -647,7 +647,7 @@ def game_loop():
             stop_event.set()
 
         except Exception as e:
-            print(e)
+            print("Recovering from error...")
 
         finally:
             if udp_thread:
