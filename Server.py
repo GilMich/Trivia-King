@@ -305,8 +305,8 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
             answer_value = 1 if client_answer_decoded == "true" else 0
             clients_dict[client_address]["client_answers"].append(answer_value)
         else:
-            print(f"Invalid answer received: {client_answer_decoded}")
-            e = ValueError(f"Invalid answer received: {client_answer_decoded}")
+            # print(f"Invalid answer received: {client_answer_decoded}")
+            e = ValueError(f"No answer received from {clients_dict[client_address]['name']}")
             handle_socket_error(e, "get_answer_from_client")
 
     except (socket.timeout, BlockingIOError, socket.error) as e:
