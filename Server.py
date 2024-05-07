@@ -62,9 +62,8 @@ def handle_socket_error(exception, function):
     error_type = type(exception).__name__
     error_message = str(exception)
 
-    print_red(f"Error in: '{function}' function ")
-    print_red(f"Error Type: {error_type}")
-    print_red(f"Error Details: {error_message}")
+    # print_red(f"Error in: '{function}' function ")  # for debugging
+    print_red(f"Error Type: {error_type}, {error_message}")
 
 
 def get_local_ip():
@@ -217,7 +216,7 @@ def watch_for_inactivity(stop_event, timeout=10):
     while not stop_event.is_set():
         with time_lock:
             elapsed = time.time() - last_connection_time
-        if elapsed >= timeout:
+        if elapsed >= timeout and len(clients_dict) >= 2:
             stop_event.set()
             break
         time.sleep(1)  # Sleep briefly to avoid busy waiting
@@ -321,7 +320,7 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
         client_answer_encoded = client_socket.recv(1024)
         if not client_answer_encoded:
             e = ValueError("No data received; client may have disconnected")
-            handle_socket_error(e, "get_answer_from_client")
+            raise handle_socket_error(e, "get_answer_from_client")
 
         client_time_to_answer = round((time.time() - trivia_sending_time), 2)
         clients_dict[client_address]["answers_times"].append(client_time_to_answer)
@@ -333,7 +332,7 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
         else:
             print(f"Invalid answer received: {client_answer_decoded}")
             e = ValueError(f"Invalid answer received: {client_answer_decoded}")
-            handle_socket_error(e, "get_answer_from_client")
+            raise handle_socket_error(e, "get_answer_from_client")
 
     except (socket.timeout, BlockingIOError, socket.error) as e:
         handle_socket_error(e, "get_answer_from_client")
