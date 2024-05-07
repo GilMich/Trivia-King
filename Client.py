@@ -7,7 +7,7 @@ import threading
 import queue
 
 
- # Last update 17:39
+# Last update 17:39
 def print_red(message):
     print(f"\033[31m{message}\033[0m")
 
@@ -21,7 +21,7 @@ def unpack_packet(data):
     'B' for the 1-byte message type
     '32s' for the 32-byte server name
     'H' for the 2-byte port number
-    
+
     Args:
         data (bytes): The raw bytes received from the UDP broadcast.
 
@@ -40,7 +40,8 @@ def unpack_packet(data):
     except UnicodeDecodeError as ude:
         print(f"Failed to decode server name: {ude}")
         return None
-    
+
+
 # UDP Listener for server broadcast
 # def looking_for_a_server():
 #     print("Client started, listening for offer requests...")
@@ -107,6 +108,7 @@ def looking_for_a_server():
         return None
 
     magic_cookie, message_type, server_name, server_port = unpack_packet(data)
+    server_name = server_name.strip(' ')  # Strip null bytes
     if magic_cookie != 0xabcddcba:
         print("Invalid magic cookie in udp packet! nice try hacker!")
         return None
@@ -137,7 +139,7 @@ def connect_to_server(server_ip, server_port):
         # Connect the socket to the server's address and port
         tcp_socket.connect((server_ip, server_port))
     except OSError as e:
-        print(f"A {type(e)} occurred while trying to connect to the server with tcp: {e}\n")
+        print(f"An error occurred while trying to connect to the server with tcp \n")
 
     print(f"Successfully connected to the server at {server_ip}:{server_port} \n")
     # Immediately sends the player name after the connection is established
@@ -146,7 +148,8 @@ def connect_to_server(server_ip, server_port):
     try:
         tcp_socket.sendall(name_message.encode())
     except OSError as e:
-        print_red(f"A Connection Reset Error occurred while sending the player name: {e}\n")
+        print_red(f"A Connection Reset Error occurred while sending the player name\n")
+        return None
 
     return tcp_socket
 
@@ -168,9 +171,9 @@ def print_welcome_message(server_tcp_socket):
         return True
     except (ConnectionResetError, OSError) as e:
         print_red(f"Error occurred due to server disconnection or crash while trying to receive the welcome message.")
-        raise
+        raise ConnectionError("Server disconnected while trying to receive the welcome message.")
     except Exception as e:
-        raise Exception(f"An unexpected error {type(e).__name__} occurred while trying to receive the welcome message.")
+        raise Exception(f"An unexpected error occurred while trying to receive the welcome message.")
 
 
 def print_trivia_question(server_tcp_socket):
@@ -270,7 +273,7 @@ def send_answer_to_server(server_tcp_socket, user_answer):
         server_tcp_socket.sendall(message.encode('utf-8'))
     except sock.error:
         print_red(f"Failed to send answer to server.")
-        raise
+        raise ConnectionError("Error sending answer to server.")
 
 
 def print_message_from_server(server_tcp_socket):
@@ -287,17 +290,17 @@ def print_message_from_server(server_tcp_socket):
 
         message_decoded = message_encoded.decode('utf-8')
         print(message_decoded)
-    except sock.error:
+    except OSError:
         print_red("Error receiving message from server.")
-        raise
+        raise ConnectionError("Error receiving winner message from server.")
     except UnicodeDecodeError:
         # Specific exception for issues during the decoding process
         print_red("Unicode decode error.")
-        raise
+        raise UnicodeDecodeError("Error decoding message from server.")
     except Exception:
         # A generic exception handler for any other unforeseen exceptions
         print_red(f"An unexpected error occurred while trying print message from server.")
-        raise
+        raise Exception("Unexpected error while trying to print message from server.")
 
 
 if __name__ == "__main__":
@@ -327,7 +330,7 @@ if __name__ == "__main__":
             print_red("Client is shutting down due to a keyboard interrupt.")
             break
         except Exception as e:
-            print_red(f"Error details: {e}")
+            print_red(f"Error details: {str(e)}")
         finally:
             if server_tcp_socket:
                 server_tcp_socket.close()
