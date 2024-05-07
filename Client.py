@@ -1,4 +1,5 @@
 import errno
+import socket
 import socket as sock
 import sys
 import time
@@ -7,53 +8,61 @@ import threading
 import queue
 
 
-def print_red(message):
-    print(f"\033[31m{message}\033[0m")
+def handle_socket_error(exception, operation, function):
+    """
+    Handles exceptions raised during socket operations.
+
+    Args:
+    exception: The exception instance that was raised.
+    operation: A string describing the socket operation during which the error occurred.
+    function: A string indicating the function name where the error occurred.
+
+    This function prints a detailed error message based on the type of socket exception, the operation, and the function where it happened. All messages are printed in red.
+    """
+    error_type = type(exception).__name__
+    error_message = str(exception)
+
+    # Function to print messages in red
+    def print_red(message):
+        print(f"\033[31m{message}\033[0m")
+
+    print_red(f"Error occurred in function '{function}' during {operation}.")
+    print_red(f"Error Type: {error_type}")
+    print_red(f"Error Details: {error_message}")
+
+    if isinstance(exception, sock.timeout):
+        print_red("This was a timeout error. Please check network conditions and retry.")
+    elif isinstance(exception, sock.error):
+        print_red("A general socket error occurred. Please check the socket operation and parameters.")
+    elif isinstance(exception, sock.gaierror):
+        print_red("An address-related error occurred. Please verify the network address details.")
+    elif isinstance(exception, sock.herror):
+        print_red("A host-related error occurred. Check DNS configurations and host availability.")
+    else:
+        print_red("An unexpected type of error occurred. Please consult system logs or network settings.")
 
 
 def unpack_packet(data):
-    """
-    Unpacks a server broadcast packet according to a predefined structure.
-    The format string for unpacking the packet:
-    '>'  stands for big-endian, meaning the first decoded part of the packet will be stored in the first variable basically meaning that encoding happens from left to right
-    'I' for the 4-byte magic cookie
-    'B' for the 1-byte message type
-    '32s' for the 32-byte server name
-    'H' for the 2-byte port number
-    
-    Args:
-        data (bytes): The raw bytes received from the UDP broadcast.
+    # Define the format string for unpacking the packet
+    # '>'  stands for big-endian, meaning the first decoded part of the packet will be stored in the first variable basically meaning that encoding happens from left to right
 
-    Returns:
-        tuple: A tuple containing the unpacked magic_cookie, message_type, server_name, and server_port.
-               Returns None if unpacking fails due to incorrect data format.
-    """
-    packet_format = '>IB32sH'  # Big-endian: int, byte, 32-byte string, short
-    try:
-        magic_cookie, message_type, server_name_raw, server_port = struct.unpack(packet_format, data)
-        server_name = server_name_raw.decode('utf-8').strip('\x00')  # Decode and strip null bytes
-        return magic_cookie, message_type, server_name, server_port
-    except struct.error as e:
-        print(f"Failed to unpack data due to: {e}")
-        return None
-    except UnicodeDecodeError as ude:
-        print(f"Failed to decode server name: {ude}")
-        return None
+    # 'I' for the 4-byte magic cookie
+    # 'B' for the 1-byte message type
+    # '32s' for the 32-byte server name
+    # 'H' for the 2-byte port number
+    packet_format = '>IB32sH'
+
+    # Unpack the data according to the specified format
+    magic_cookie, message_type, server_name_raw, server_port = struct.unpack(packet_format, data)
+
+    # Decode the server name to a string, stripping null bytes
+    server_name = server_name_raw.decode().strip('\x00 ')
+
+    return magic_cookie, message_type, server_name, server_port
 
 
+# UDP Listener for server broadcast
 def looking_for_a_server():
-    """
-    Listens for UDP broadcasts to discover available trivia game servers. It binds to a specific port
-    to receive server details such as server name, IP, and port.
-
-    This function checks for issues like address already in use or invalid broadcast messages (wrong magic cookie or message type),
-    and handles exceptions for socket operations and timeouts.
-
-    Returns:
-        tuple: Returns server details (name, IP, port) if a valid broadcast is received, otherwise None.
-        None: Returned in case of errors such as socket binding issues, timeouts, or invalid data.
-    """
-
     print("Client started, listening for offer requests...")
     udp_socket = sock.socket(sock.AF_INET, sock.SOCK_DGRAM)
     udp_socket.setsockopt(sock.SOL_SOCKET, sock.SO_REUSEADDR, 1)
@@ -61,26 +70,23 @@ def looking_for_a_server():
         udp_socket.bind(('', 13117))
     except OSError as e:
         if e.errno == errno.EADDRINUSE:
-            print("Error while binding the socket: Address already in use. Please try again later.")
-            return None
+            raise RestartGameError("Error while binding the socket: Address already in use. Please try again later.") from e
+
         else:
-            print("An unrecognized error has occurred during binding, trying to bind again...")
-            return None
-
+            raise RestartGameError("An unrecognized error has occurred during binding, trying to bind again...") from e
     try:
-        # Blocking method. it won't reach the next line until it detects a broadcast
-        data, addr = udp_socket.recvfrom(1024)
-    except sock.timeout as t:
-        print("timeout receiving udp data packet from the server!")
-        return None
+        data, addr = udp_socket.recvfrom(
+            1024)  # Blocking method! it won't reach the next line until it detects a broadcast
 
+    except sock.timeout as t:
+        raise RestartGameError(f"timeout receiving udp data packet from the server! ") from t
     magic_cookie, message_type, server_name, server_port = unpack_packet(data)
+
     if magic_cookie != 0xabcddcba:
-        print("Invalid magic cookie in udp packet! nice try hacker!")
-        return None
+        raise RestartGameError("Invalid magic cookie in udp packet! nice try hacker!")
+
     if message_type != 0x2:
-        print("Invalid message type in udp packet!")
-        return None
+        raise RestartGameError("Invalid message type in udp packet!")
 
     server_ip = addr[0]
     print(f'Received offer from server "{server_name}" at address {addr[0]}, attempting to connect...')
@@ -88,23 +94,13 @@ def looking_for_a_server():
 
 
 def connect_to_server(server_ip, server_port):
-    """
-    Establishes a TCP connection to the trivia game server at the specified IP address and port.
-
-    Args:
-        server_ip (str): The IP address of the server.
-        server_port (int): The port number on which the server is listening.
-
-    Returns:
-        socket.socket: The connected TCP socket if successful, or None if the connection fails.
-    """
     # Create a TCP/IP socket
     tcp_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
     try:
         # Connect the socket to the server's address and port
         tcp_socket.connect((server_ip, server_port))
     except OSError as e:
-        print(f"A {type(e)} occurred while trying to connect to the server with tcp: {e}\n")
+        raise OSError(f"A {type(e)} occurred while trying to connect to the server with tcp : {e}\n") from e
 
     print(f"Successfully connected to the server at {server_ip}:{server_port} \n")
     # Immediately sends the player name after the connection is established
@@ -113,79 +109,66 @@ def connect_to_server(server_ip, server_port):
     try:
         tcp_socket.sendall(name_message.encode())
     except OSError as e:
-        print_red(f"A Connection Reset Error occurred while sending the player name: {e}\n")
-
+        raise OSError(f"A {type(e)} occurred while sending the player name: {e}\n") from e
     return tcp_socket
 
 
 def print_welcome_message(server_tcp_socket):
-    """
-    Receives and prints the welcome message from the server.
-
-    Args:
-        server_tcp_socket (socket.socket): The TCP socket connected to the server.
-    """
     try:
         message_encoded = server_tcp_socket.recv(1024)
-        if not message_encoded:
-            raise ConnectionError("Server disconnected, no data received.")
 
-        message_decoded = message_encoded.decode('utf-8')
-        print(message_decoded)
-        return True
-    except (ConnectionResetError, OSError) as e:
-        print_red(f"Error occurred due to server disconnection or crash while trying to receive the welcome message.")
-        raise
-    except Exception as e:
-        raise Exception(f"An unexpected error {type(e).__name__} occurred while trying to receive the welcome message.")
+    except ConnectionResetError as cre:
+        raise RestartGameError(
+            f"{type(cre)} Server disconnected or crashed while trying to receive the welcome message.\n") from cre
+    except OSError as e:
+        raise ContinueGameError(f"A {type(e)} occurred while trying to receive the welcome message: {e}\n") from e
+    message_decoded = message_encoded.decode('utf-8')
+    print(message_decoded)
+    return True
 
 
 def print_trivia_question(server_tcp_socket):
-    """
-    Receives and prints the trivia question from the server.
-
-    Args:
-        server_tcp_socket (socket.socket): The TCP socket connected to the server.
-    """
     try:
         message_encoded = server_tcp_socket.recv(1024)
 
-        if not message_encoded:
-            raise ConnectionError("Server closed the connection unexpectedly.")
+    except ConnectionResetError as cre:
+        raise RestartGameError(
+            f"{type(cre)} Server disconnected or crashed while trying to receive the trivia question.\n") from cre
+    except OSError as e:
+        raise ContinueGameError(f"A {type(e)} occurred while trying to receive the trivia question: {e}\n") from e
 
-        message_decoded = message_encoded.decode('utf-8')
-        print(message_decoded)
-        return True
-    except (sock.error, ConnectionError) as e:
-        print_red(f"Error occurred due to server disconnection or crash while trying to receive trivia question.")
-        raise
+    message_decoded = message_encoded.decode('utf-8')
+    print(message_decoded)
+    return True
+
+
+class ContinueGameError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
+
+class RestartGameError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
 
 
 def get_input(input_queue, valid_keys, stop_event):
-    """
-    Collects user input in a loop until a valid key is entered or a stop event is set.
-
-    Args:
-        input_queue (queue.Queue): The queue to which valid inputs are added.
-        valid_keys (list[str]): A list of strings that are considered valid inputs.
-        stop_event (threading.Event): An event that, when set, will break the loop and stop the function.
-    """
-
     while not stop_event.is_set():
         try:
-            user_input = input("Enter your response: ")
+            user_input = input("Enter [1, t, y] for True, [0, f, n] for False: \n")
             if user_input in valid_keys:
                 input_queue.put(user_input)
                 break
-            print("Invalid input. Please try again.")
+            else:
+                print("Invalid input. Please try again.\n")
         except UnicodeDecodeError as ude:
-            print_red("Unicode decode error during user input")
+            print(f"Unicode decode error during user input: {ude}\n")
             stop_event.set()  # Signal to end this thread due to input issues
-            return False
+            break
         except Exception as e:
-            print_red("General error during user input.")
+            print(f"Error of type : {type(e)} during getting user input: {e}\n")
             stop_event.set()  # Signal to end this thread for any other issues
-            raise
+            break
 
 
 def get_answer_from_user() -> bool | None:
@@ -196,16 +179,15 @@ def get_answer_from_user() -> bool | None:
 
     input_queue = queue.Queue()
     input_thread = threading.Thread(target=get_input, args=(input_queue, valid_keys, stop_event))
-    if not input_thread:
-        return None
+    input_thread.daemon = True
     input_thread.start()
 
     try:
-        user_input = input_queue.get(block=True, timeout=15)  # Reduced timeout to test quicker
+        user_input = input_queue.get(block=True, timeout=10)  # Reduced timeout to test quicker
     except queue.Empty:
-        print("No input received within the time limit.")
+        print("No input received within the time limit.\n")
         stop_event.set()  # Ensure we signal the thread to stop if it hasn't already
-        input_thread.join(timeout=15)  # Wait for the thread to finish
+        # input_thread.join(timeout=0.1)  # Dont wait for the thread to finish
         return None
 
     if user_input in valid_true_keys:
@@ -218,85 +200,77 @@ def get_answer_from_user() -> bool | None:
 
 def send_answer_to_server(server_tcp_socket, user_answer):
     """
-    Sends the user's answer to the server. This function handles the transmission of the user's
-    answer as a string representation of boolean values 'true', 'false', or 'none' for undefined.
-
-    Args:
-        server_tcp_socket (socket.socket): The TCP socket connected to the server.
-        user_answer (bool | None): The user's answer as a boolean or None if no answer was provided.
+    Sends the user's answer to the server and checks if the operation was successful.
+    Returns True if the message was sent successfully, False otherwise.
     """
-    # Define the message based on the user's answer
-    if user_answer is True:
+    # Prepare the message
+    if user_answer is None:
+        message = "none"
+    elif user_answer:
         message = "true"
-    elif user_answer is False:
-        message = "false"
     else:
-        message = "none"  # This handles None or any other unexpected value
-
+        message = "false"
+    # Send the message
     try:
-        server_tcp_socket.sendall(message.encode('utf-8'))
-    except sock.error:
-        print_red(f"Failed to send answer to server.")
-        raise
+        server_tcp_socket.sendall(message.encode())
+    except ConnectionResetError as cre:
+        raise RestartGameError(
+            f"Server disconnected or crashed while trying to send the answer {type(cre)} .\n") from cre
+    except OSError as e:
+        raise ContinueGameError(f"Error occurred while sending the answer to the server: {type(e)} {e}\n") from e
 
 
-def print_message_from_server(server_tcp_socket):
-    """
-    Receives and prints a message from the server.
-
-    Args:
-        server_tcp_socket (socket.socket): The TCP socket connected to the server.
-    """
+def print_results_from_server(server_tcp_socket):
+    server_tcp_socket.settimeout(5)  # Set a timeout for receiving messages
     try:
-        message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary
-        if not message_encoded:
-            raise ConnectionError("Server closed the connection unexpectedly.")
-
-        message_decoded = message_encoded.decode('utf-8')
-        print(message_decoded)
-    except sock.error:
-        print_red("Error receiving message from server.")
-        raise
-    except UnicodeDecodeError:
-        # Specific exception for issues during the decoding process
-        print_red("Unicode decode error.")
-        raise
-    except Exception:
-        # A generic exception handler for any other unforeseen exceptions
-        print_red(f"An unexpected error occurred while trying print message from server.")
-        raise
+        winner_message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary
+        winner_message = winner_message_encoded.decode('utf-8')
+        print(winner_message + "\n")
+        stats_message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary
+        stats_message = stats_message_encoded.decode('utf-8')
+        print(stats_message + "\n")
+    except OSError as e:
+        raise RestartGameError(f"Error {type(e)} occurred while receiving game results from server: {e}") from e
 
 
+# Main client function
 if __name__ == "__main__":
     server_tcp_socket = None
     while True:
         try:
             server_name, server_ip, server_port = looking_for_a_server()
-            if not server_name:
-                continue
-
             server_tcp_socket = connect_to_server(server_ip, server_port)
             if not server_tcp_socket:
                 continue
+            try:  # if there is error here try to get the trivia question still.
+                print_welcome_message(server_tcp_socket)
+            except ContinueGameError as cge:
+                print(cge)
+            try:  # if there is error here, try to get the game results still.
+                print_trivia_question(server_tcp_socket)
+                user_answer = get_answer_from_user()
+                result_sending_to_server = send_answer_to_server(server_tcp_socket, user_answer)
+            except ContinueGameError as ige:
+                print(ige)
+            print_results_from_server(server_tcp_socket)
 
-            if not print_welcome_message(server_tcp_socket):
-                raise Exception("Failed to receive welcome message.")
-            if not print_trivia_question(server_tcp_socket):
-                raise Exception("Failed to receive trivia question.")
+        except RestartGameError as rge:
+            print(rge)
+            continue
 
-            user_answer = get_answer_from_user()
-            send_answer_to_server(server_tcp_socket, user_answer)
-
-            print_message_from_server(server_tcp_socket)  # Winner message
-            print_message_from_server(server_tcp_socket)  # Stats message
+        except ConnectionResetError as cre:  # this never should happen, but just in case
+            print("Server disconnected unexpectedly, looking for new server...")
+            # this never should happen, but just in case
+            continue
 
         except KeyboardInterrupt:
-            print_red("Client is shutting down due to a keyboard interrupt.")
-            break
-        except Exception as e:
-            print_red(f"Error details: {e}")
+            print("Client is shutting down due to a keyboard interrupt.")
+
+        except OSError as e:  # this never should happen, but just in case
+            print(e)
         finally:
             if server_tcp_socket:
                 server_tcp_socket.close()
-                print("Disconnected from the server.\n\n")
+                print("Disconnected from the server.")
+                server_tcp_socket = None
             time.sleep(2)  # Wait before trying to connect again
