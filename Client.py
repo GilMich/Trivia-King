@@ -205,9 +205,14 @@ def send_answer_to_server(server_tcp_socket, user_answer):
         return False
 
 
-def print_message_from_server(server_tcp_socket):
+def print_winner_message_and_stats(server_tcp_socket):
+    """
+    Receives a message from the server and prints it to the console.
+    :param server_tcp_socket:
+    :return:
+    """
     try:
-        message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary
+        message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary.
         if not message_encoded:
             print("Server has disconnected.")
             return None
@@ -240,8 +245,7 @@ if __name__ == "__main__":
             user_answer = get_answer_from_user()
             send_answer_to_server(server_tcp_socket, user_answer)
 
-            print_message_from_server(server_tcp_socket)  # Winner message
-            print_message_from_server(server_tcp_socket)  # Stats message
+            print_winner_message_and_stats(server_tcp_socket)  # Winner message
 
         except KeyboardInterrupt:
             print("Client is shutting down due to a keyboard interrupt.")
@@ -253,22 +257,5 @@ if __name__ == "__main__":
                 server_tcp_socket.close()
                 print("Disconnected from the server.")
             time.sleep(5)  # Wait before trying to connect again
-        # time.sleep(5)  # Adjust timing as needed
-
-        # if not print_welcome_message(server_tcp_socket) or not print_trivia_question(server_tcp_socket):
-        #     if server_tcp_socket:
-        #         server_tcp_socket.close()
-        #     server_tcp_socket = None
-        #     continue  # Skip further actions and attempt to reconnect
-        #
-        # user_answer = get_answer_from_user()
-        # if not send_answer_to_server(server_tcp_socket, user_answer):
-        #     if server_tcp_socket:
-        #         server_tcp_socket.close()
-        #     server_tcp_socket = None  # Reset the connection
-
-        # if server_tcp_socket:
-        #     server_tcp_socket.close()
-        #     print("Disconnected from the server.")
 
     # todo missing function to send the answer to the server
