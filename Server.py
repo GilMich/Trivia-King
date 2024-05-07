@@ -15,7 +15,7 @@ server_name = "Trivia King"
 trivia_topic = "The Olympics"
 
 
-# ------------- CHECKED ----------------
+# FINAL VERSION
 def load_trivia_questions(file_path):
     """
     Loads trivia questions from a JSON file.
@@ -152,7 +152,6 @@ def udp_broadcast(server_name, server_port, stop_event):
             time.sleep(2)  # Sleep to manage loop frequency and reduce network congestion
 
 
-# ------------- CHECKED ----------------
 def save_client_info(client_socket, client_address):
     """
     Receives data from a client socket to update global client records.
@@ -188,7 +187,6 @@ def save_client_info(client_socket, client_address):
             handle_socket_error(e, "save_client_info")
 
 
-# ------------- CHECKED ----------------
 def watch_for_inactivity(stop_event, timeout=10):
     """
     Monitors the time elapsed since the last client interaction and sets a stop event
@@ -236,7 +234,6 @@ def tcp_listener(server_port, stop_event):
         continue  # if a client already connected while waiting for another one, the stop event will be true here. if nobody connected we will just keep waiting
 
 
-# ------------- CHECKED ----------------
 def welcome_message(server_name, trivia_topic):
     """
     Sends a welcome message to all connected clients.
@@ -254,7 +251,8 @@ def welcome_message(server_name, trivia_topic):
 
     # Create a formatted welcome message with instructions
     instructions = "Please respond to each question by typing '1', 't', or 'y' for True and '0', 'f', or 'n' for False."
-    message = f"\nWelcome to the {server_name} server, where we are answering trivia questions about {trivia_topic}.\n{instructions}\n"
+    olympic_rings = get_olympic_rings()
+    message = f"\n{olympic_rings}\nWelcome to the {server_name} server, where we are answering trivia questions about {trivia_topic}.\n{instructions}\n"
 
     # Append each client's name to the message
     for index, (address, client_info) in enumerate(clients_dict.items(), start=1):
@@ -269,7 +267,6 @@ def welcome_message(server_name, trivia_topic):
     print(message)
 
 
-# ------------- CHECKED ----------------
 def send_trivia_question(questions) -> bool:
     """
     Sends a randomly selected trivia question to all connected clients.
@@ -293,11 +290,10 @@ def send_trivia_question(questions) -> bool:
             client["socket"].sendall(message.encode('utf-8'))
         except Exception as e:
             # Log the error and continue to attempt to send to other clients
-            handle_socket_error(e,  "sending_trivia_question")
+            handle_socket_error(e, "sending_trivia_question")
     return trivia_answer
 
 
-# ------------- CHECKED ----------------
 def get_answer_from_client(client_socket, client_address, trivia_sending_time):
     """
     Receives and processes the trivia answer from a connected client, logging their response time.
@@ -341,6 +337,9 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
 
 
 def get_all_answers(trivia_sending_time: float):
+    """
+    gets the answer from all clients in parallel
+    """
     list_of_threads = []
     for client_address in clients_dict.keys():
         client_socket = clients_dict[client_address]["socket"]
@@ -348,7 +347,7 @@ def get_all_answers(trivia_sending_time: float):
                                   args=(client_socket, client_address, trivia_sending_time))
         thread.start()
         list_of_threads.append(thread)  # Store the thread reference in the list
-    time.sleep(5)
+    time.sleep(3)
     # Wait for all threads to complete
     for thread in list_of_threads:
         thread.join(timeout=10)
@@ -375,7 +374,9 @@ def calculate_winner(correct_answer: bool) -> tuple | None:
 
 
 def send_winner_message(winner_address):
-
+    """
+    Sends a message to all clients indicating the winner of the trivia round.
+    """
     if winner_address is None:
         message = "No one answered correctly this time. Better luck next time!"
     else:
@@ -388,6 +389,7 @@ def send_winner_message(winner_address):
         except Exception as e:
             handle_socket_error(e, "send_winner_message")
             continue
+
 
 def build_statistics_table():
     """
@@ -426,6 +428,9 @@ def build_statistics_table():
 
 
 def send_statistics_to_all_clients():
+    """
+    Sends a formatted statistics table to all connected clients.
+    """
     formatted_table = build_statistics_table()
 
     # Encode and send
@@ -438,45 +443,20 @@ def send_statistics_to_all_clients():
                 info['is_client_active'] = False
                 handle_socket_error(e, "send_statistics")
     print(formatted_table)
-# def send_statistics_to_all_clients(correct_answer):
-#     headers = ["Player Name", "Answer", "Time"]
-#     table_data = []
-#
-#     for addr, info in clients_dict.items():
-#         if info['is_client_active']:  # Ensure we only send to active clients
-#             name = info['name']
-#             if info['client_answers'][-1] == 1:
-#                 client_answer = "True"
-#             elif info['client_answers'][-1] == 0:
-#                 client_answer = "False"
-#             else:
-#                 client_answer = "No answer"
-#             client_time = info['answers_times'][-1]
-#             # average_time = total_time / count_times if count_times > 0 else 0
-#             # Append player data to the table list
-#             table_data.append([name, client_answer, f"{client_time:.2f} seconds"])
-#
-#     # Create a table using tabulate
-#     stats_table = tabulate(table_data, headers=headers, tablefmt="pretty")
-#
-#     # Add a title to the table
-#     title = "Game Statistics:"
-#     # Prepending the title centered with newline for separation
-#     formatted_table = f"\n{title}\n{stats_table}\n"
-#
-#     print(formatted_table)
-#     # Encode and send
-#     stats_message_encoded = formatted_table.encode('utf-8')
-#     for addr, info in clients_dict.items():
-#         if info['is_client_active']:
-#             try:
-#                 info['socket'].sendall(stats_message_encoded)
-#             except Exception as e:
-#                 info['is_client_active'] = False
-#                 handle_socket_error(e, "send_statistics")
-#
+
 
 def close_all_client_sockets():
+    """
+    Closes all client sockets that are currently open and clears the client dictionary.
+
+    Iterates over each entry in the global dictionary `clients_dict` which stores client information,
+    attempts to close each client's socket connection, and captures any exceptions that occur during
+    this process. After attempting to close all sockets, it clears the dictionary to ensure that
+    no outdated client information remains.
+
+    Raises:
+        Exception: Outputs an error message if a socket fails to close.
+    """
     for client_info in clients_dict.values():
         client_socket = client_info['socket']
         if client_socket:
@@ -487,8 +467,21 @@ def close_all_client_sockets():
     clients_dict.clear()
 
 
-# new code
 def client_handler(client_socket, client_address):
+    """
+      Handles communication with a client through a socket connection.
+
+      Args:
+          client_socket (socket.socket): The socket object for communicating with the client.
+          client_address (str): The address of the client connected to the server.
+
+      Returns:
+          None
+
+      Raises:
+          ConnectionError: Raised when no data is received, indicating the client has disconnected.
+          Exception: Catches and handles any other exceptions that occur during client handling.
+      """
     try:
         while True:
             data = client_socket.recv(1024)
@@ -505,6 +498,10 @@ def client_handler(client_socket, client_address):
 
 
 def monitor_clients():
+    """
+    this function will check if the client is still alive by checking if the socket is still connected.
+    if the socket is not connected, it will remove the client from the clients_dict
+    """
     while True:
         time.sleep(3)
         for client_address, client_info in list(clients_dict.items()):
@@ -513,6 +510,25 @@ def monitor_clients():
 
 
 def is_client_alive(sock) -> bool:
+    """
+        Checks if a client socket is still connected by attempting to receive data.
+
+        This function first sets the socket to non-blocking mode to try receiving data without waiting.
+        If any data is received, the function returns True, indicating the client is still connected.
+        If no data is received but no errors occur, it still assumes the connection is alive. If any
+        other exceptions occur, it indicates the client is not connected by returning False. The socket
+        is then set back to blocking mode after the check.
+
+        Args:
+            sock (socket.socket): The socket object associated with the client to be checked.
+
+        Returns:
+            bool: True if the client is considered alive, False otherwise.
+
+        Raises:
+            BlockingIOError: No data received but the client is still connected.
+            Exception: Any other exceptions imply the socket is no longer connected.
+        """
     try:
         # this is a non-blocking call
         sock.setblocking(0)
@@ -529,6 +545,15 @@ def is_client_alive(sock) -> bool:
 
 
 def remove_client(client_address):
+    """
+    Removes a client from the active clients dictionary and closes their socket connection.
+
+    Args:
+        client_address (str): The address of the client to be removed, typically the IP address and port number.
+
+    Raises:
+        Exception: Outputs an error message if the socket fails to close properly.
+    """
     if client_address in clients_dict:
         client_info = clients_dict.pop(client_address, None)
         if client_info and client_info['socket']:
@@ -540,10 +565,33 @@ def remove_client(client_address):
         print(f"\033[31mRemoved\033[0m client {client_address} from active clients.")
 
 
-# def game_loop():
-#     threading.Thread(target=monitor_clients, daemon=True).start()
-#
-# check why its not working with stop_event.wait(timeout=10) instead of time.sleep(10)
+def get_olympic_rings():
+    """
+    Generates a string representation of the Olympic Rings using Unicode circle characters
+    and ANSI escape codes for colored output. This creates a visually appealing representation
+    of the Olympic rings.
+
+    Returns:
+        str: A string containing the colored Olympic Rings.
+    """
+
+    olympic_rings_colored = """
+    \033[34m      ooooo\033[0m      \033[30mooooo\033[0m      \033[31mooooo\033[0m
+    \033[34m    o       o\033[0m  \033[30mo       o\033[0m  \033[31mo       o\033[0m
+    \033[34m   o         o\033[0m\033[30mo         o\033[0m\033[31mo         o\033[0m
+    \033[34m   o         o\033[0m\033[30mo         o\033[0m\033[31mo         o\033[0m
+    \033[34m    o       o\033[0m  \033[30mo       o\033[0m  \033[31mo       o\033[0m
+    \033[34m      ooooo\033[0m      \033[30mooooo\033[0m      \033[31mooooo\033[0m
+                 \033[33mooooo\033[0m      \033[32mooooo\033[0m
+               \033[33mo       o\033[0m  \033[32mo       o\033[0m
+              \033[33mo         o\033[0m\033[32mo         o\033[0m
+              \033[33mo         o\033[0m\033[32mo         o\033[0m
+               \033[33mo       o\033[0m  \033[32mo       o\033[0m
+                 \033[33mooooo\033[0m      \033[32mooooo\033[0m
+    """
+    return olympic_rings_colored
+
+
 if __name__ == "__main__":
     threading.Thread(target=monitor_clients, daemon=True).start()
 
@@ -557,7 +605,6 @@ if __name__ == "__main__":
         server_port = find_free_port()
         print(f"Server started, listening on IP address: {get_local_ip()}")
         stop_event = threading.Event()
-        # clients_dict = {}
 
         udp_thread = threading.Thread(target=udp_broadcast, args=(server_name, server_port, stop_event))
         tcp_thread = threading.Thread(target=tcp_listener, args=(server_port, stop_event))
@@ -574,8 +621,6 @@ if __name__ == "__main__":
             if not any(client['is_client_active'] for client in clients_dict.values()):
                 continue
 
-            # if any(client['currently_listening_to_client'] for client in clients_dict.values()):
-            # print("clients dict stat: ", clients_dict)
             print("Starting new game round...")
             udp_thread.join()
             tcp_thread.join()
@@ -593,24 +638,15 @@ if __name__ == "__main__":
             send_statistics_to_all_clients()  # Call after a round to update clients
             time.sleep(1)  # Adjust timing as needed
             print("Round ends")
-            # continue
 
             close_all_client_sockets()
-            # clients_dict.clear()
             print("Server shutdown completed.")
-            # Clearing and reinitializing for a new round
+            # Reinitializing for a new round after a brief pause
             time.sleep(2)
 
         except KeyboardInterrupt:
             print("Shutting down the server.")
             stop_event.set()
-        # finally:
-        #     # Cleanup
-        #     udp_thread.join()
-        #     tcp_thread.join()
-        #
-        #     close_all_client_sockets()
-        #     # clients_dict.clear()
-        #     print("Server shutdown completed.")
-        #     # Clearing and reinitializing for a new round
-        #     time.sleep(5)
+
+        # except Exception as e:
+        #     print("Recovering from an error...")
