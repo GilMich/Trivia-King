@@ -1,5 +1,4 @@
 import errno
-import socket
 import socket as sock
 import sys
 import time
@@ -70,23 +69,23 @@ def looking_for_a_server():
         udp_socket.bind(('', 13117))
     except OSError as e:
         if e.errno == errno.EADDRINUSE:
-            raise RestartGameError("Error while binding the socket: Address already in use. Please try again later.") from e
-
+            print("This port is already in use by a different process! trying to bind again...")
+            return -1
         else:
-            raise RestartGameError("An unrecognized error has occurred during binding, trying to bind again...") from e
-    try:
-        data, addr = udp_socket.recvfrom(
-            1024)  # Blocking method! it won't reach the next line until it detects a broadcast
+            print("An unrecognized error has occurred during binding, trying to bind again...")
+            return -2
 
-    except sock.timeout as t:
-        raise RestartGameError(f"timeout receiving udp data packet from the server! ") from t
+    # Blocking method! it won't reach the next line until it detects a broadcast
+    data, addr = udp_socket.recvfrom(1024)
     magic_cookie, message_type, server_name, server_port = unpack_packet(data)
 
     if magic_cookie != 0xabcddcba:
-        raise RestartGameError("Invalid magic cookie in udp packet! nice try hacker!")
+        print("No Magic cookie, nice try hacker!")
+        return -3
 
     if message_type != 0x2:
-        raise RestartGameError("Invalid message type in udp packet!")
+        print("wtf this is not an offer message!")
+        return -4
 
     server_ip = addr[0]
     print(f'Received offer from server "{server_name}" at address {addr[0]}, attempting to connect...')
@@ -96,79 +95,66 @@ def looking_for_a_server():
 def connect_to_server(server_ip, server_port):
     # Create a TCP/IP socket
     tcp_socket = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
-    try:
-        # Connect the socket to the server's address and port
-        tcp_socket.connect((server_ip, server_port))
-    except OSError as e:
-        raise OSError(f"A {type(e)} occurred while trying to connect to the server with tcp : {e}\n") from e
+    # try:
+    # Connect the socket to the server's address and port
+    tcp_socket.connect((server_ip, server_port))
+    print(f"Successfully connected to the server at {server_ip}:{server_port}")
 
-    print(f"Successfully connected to the server at {server_ip}:{server_port} \n")
     # Immediately sends the player name after the connection is established
     player_name = input("Please enter your name: ")
     name_message = f"{player_name}\n"
-    try:
-        tcp_socket.sendall(name_message.encode())
-    except OSError as e:
-        raise OSError(f"A {type(e)} occurred while sending the player name: {e}\n") from e
+    tcp_socket.sendall(name_message.encode())
     return tcp_socket
+
+    # except sock.error as e:
+    #     handle_socket_error(e, "connect to server", "connect_to_server")
+    #     if tcp_socket:
+    #         tcp_socket.close()  # Ensure the socket is closed if an error occurs
+    #     return None
 
 
 def print_welcome_message(server_tcp_socket):
     try:
         message_encoded = server_tcp_socket.recv(1024)
-
-    except ConnectionResetError as cre:
-        raise RestartGameError(
-            f"{type(cre)} Server disconnected or crashed while trying to receive the welcome message.\n") from cre
-    except OSError as e:
-        raise ContinueGameError(f"A {type(e)} occurred while trying to receive the welcome message: {e}\n") from e
-    message_decoded = message_encoded.decode('utf-8')
-    print(message_decoded)
+        message_decoded = message_encoded.decode('utf-8')
+        print(message_decoded)
+    except sock.error as e:
+        handle_socket_error(e, "receiving welcome message", "print_welcome_message")
+        return False  # Return False if an error occurred
     return True
 
 
 def print_trivia_question(server_tcp_socket):
     try:
         message_encoded = server_tcp_socket.recv(1024)
-
-    except ConnectionResetError as cre:
-        raise RestartGameError(
-            f"{type(cre)} Server disconnected or crashed while trying to receive the trivia question.\n") from cre
-    except OSError as e:
-        raise ContinueGameError(f"A {type(e)} occurred while trying to receive the trivia question: {e}\n") from e
-
-    message_decoded = message_encoded.decode('utf-8')
-    print(message_decoded)
+        if not message_encoded:
+            raise sock.error("Server closed connection")
+        message_decoded = message_encoded.decode('utf-8')
+        print(message_decoded)
+    except sock.error as e:
+        handle_socket_error(e, "receiving trivia question", "print_trivia_question")
+        return False  # Return False if an error occurred
     return True
-
-
-class ContinueGameError(Exception):
-    def __init__(self, message):
-        super().__init__(message)
-
-
-class RestartGameError(Exception):
-    def __init__(self, message):
-        super().__init__(message)
 
 
 def get_input(input_queue, valid_keys, stop_event):
     while not stop_event.is_set():
         try:
-            user_input = input("Enter [1, t, y] for True, [0, f, n] for False: \n")
+            user_input = input("Enter your response: ")
             if user_input in valid_keys:
                 input_queue.put(user_input)
                 break
             else:
-                print("Invalid input. Please try again.\n")
+                print("Invalid input. Please try again.")
         except UnicodeDecodeError as ude:
-            print(f"Unicode decode error during user input: {ude}\n")
+            print(f"Unicode decode error during user input: {ude}")
             stop_event.set()  # Signal to end this thread due to input issues
             break
         except Exception as e:
-            print(f"Error of type : {type(e)} during getting user input: {e}\n")
+            print(f"General error during user input: {e}")
             stop_event.set()  # Signal to end this thread for any other issues
             break
+
 
 
 def get_answer_from_user() -> bool | None:
@@ -179,15 +165,14 @@ def get_answer_from_user() -> bool | None:
 
     input_queue = queue.Queue()
     input_thread = threading.Thread(target=get_input, args=(input_queue, valid_keys, stop_event))
-    input_thread.daemon = True
     input_thread.start()
 
     try:
-        user_input = input_queue.get(block=True, timeout=10)  # Reduced timeout to test quicker
+        user_input = input_queue.get(block=True, timeout=15)  # Reduced timeout to test quicker
     except queue.Empty:
-        print("No input received within the time limit.\n")
+        print("No input received within the time limit.")
         stop_event.set()  # Ensure we signal the thread to stop if it hasn't already
-        # input_thread.join(timeout=0.1)  # Dont wait for the thread to finish
+        input_thread.join(timeout=15)  # Wait for the thread to finish
         return None
 
     if user_input in valid_true_keys:
@@ -203,25 +188,46 @@ def send_answer_to_server(server_tcp_socket, user_answer):
     Sends the user's answer to the server and checks if the operation was successful.
     Returns True if the message was sent successfully, False otherwise.
     """
-    # Prepare the message
-    if user_answer is None:
-        message = "none"
-    elif user_answer:
-        message = "true"
-    else:
-        message = "false"
-    # Send the message
     try:
-        server_tcp_socket.sendall(message.encode())
-    except ConnectionResetError as cre:
-        raise RestartGameError(
-            f"Server disconnected or crashed while trying to send the answer {type(cre)} .\n") from cre
-    except OSError as e:
-        raise ContinueGameError(f"Error occurred while sending the answer to the server: {type(e)} {e}\n") from e
+        # Prepare the message
+        if user_answer is None:
+            message = "none"
+        elif user_answer:
+            message = "true"
+        else:
+            message = "false"
 
+        # Send the message
+        server_tcp_socket.sendall(message.encode())
+        return True
+    except sock.error as e:
+        handle_socket_error(e, "sending answer", "send_answer_to_server")
+        return False
+
+
+def print_message_from_server(server_tcp_socket):
+    try:
+        message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary
+        if not message_encoded:
+            print("Server has disconnected.")
+            return None
+        message = message_encoded.decode('utf-8')
+        print(message)
+    except sock.error as e:
+        print(f"Error receiving message from server: {e}")
+        return None
+
+class ContinueGameError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
+
+class RestartGameError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
 
 def print_results_from_server(server_tcp_socket):
-    server_tcp_socket.settimeout(5)  # Set a timeout for receiving messages
+    server_tcp_socket.settimeout(15)  # Set a timeout for receiving messages
     try:
         winner_message_encoded = server_tcp_socket.recv(1024)  # Adjust buffer size if necessary
         winner_message = winner_message_encoded.decode('utf-8')
@@ -230,7 +236,7 @@ def print_results_from_server(server_tcp_socket):
         stats_message = stats_message_encoded.decode('utf-8')
         print(stats_message + "\n")
     except OSError as e:
-        raise RestartGameError(f"Error {type(e)} occurred while receiving game results from server: {e}") from e
+        raise RestartGameError(f"Error occurred while receiving game results from server: {e}") from e
 
 
 # Main client function
@@ -274,3 +280,4 @@ if __name__ == "__main__":
                 print("Disconnected from the server.")
                 server_tcp_socket = None
             time.sleep(2)  # Wait before trying to connect again
+    # todo missing function to send the answer to the server
