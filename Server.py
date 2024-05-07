@@ -191,7 +191,7 @@ def watch_for_inactivity(stop_event, timeout=10):
     while not stop_event.is_set():
         with time_lock:
             elapsed = time.time() - last_connection_time
-        if elapsed >= timeout:
+        if elapsed >= timeout and len(clients_dict) >= 2:
             stop_event.set()
             break
         time.sleep(1)  # Sleep briefly to avoid busy waiting
