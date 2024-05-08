@@ -293,10 +293,10 @@ if __name__ == "__main__":
             print_message_from_server(server_tcp_socket)  # Stats message
 
         except KeyboardInterrupt:
-            print_red("Client is shutting down due to a keyboard interrupt.")
+            print("Client is shutting down due to a keyboard interrupt.")
             break
         except Exception as e:
-            print_red(f"Error details: {str(e)}")
+            print("Recovering from error...")
         finally:
             if server_tcp_socket:
                 server_tcp_socket.close()
