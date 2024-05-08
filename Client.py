@@ -1,13 +1,12 @@
 import errno
 import socket as sock
-import sys
 import time
 import struct
 import threading
 import queue
 
 
- # Last update 17:39
+# Last update 10:16
 def print_red(message):
     print(f"\033[31m{message}\033[0m")
 
@@ -40,37 +39,6 @@ def unpack_packet(data):
     except UnicodeDecodeError as ude:
         print(f"Failed to decode server name: {ude}")
         return None
-    
-# UDP Listener for server broadcast
-# def looking_for_a_server():
-#     print("Client started, listening for offer requests...")
-#     udp_socket = sock.socket(sock.AF_INET, sock.SOCK_DGRAM)
-#     udp_socket.setsockopt(sock.SOL_SOCKET, sock.SO_REUSEADDR, 1)
-#     try:
-#         udp_socket.bind(('', 13117))
-#     except OSError as e:
-#         if e.errno == errno.EADDRINUSE:
-#             print("This port is already in use by a different process! trying to bind again...")
-#             return -1
-#         else:
-#             print("An unrecognized error has occurred during binding, trying to bind again...")
-#             return -2
-#
-#     # Blocking method! it won't reach the next line until it detects a broadcast
-#     data, addr = udp_socket.recvfrom(1024)
-#     magic_cookie, message_type, server_name, server_port = unpack_packet(data)
-#
-#     if magic_cookie != 0xabcddcba:
-#         print("No Magic cookie, nice try hacker!")
-#         return -3
-#
-#     if message_type != 0x2:
-#         print("wtf this is not an offer message!")
-#         return -4
-#
-#     server_ip = addr[0]
-#     print(f'Received offer from server "{server_name}" at address {addr[0]}, attempting to connect...')
-#     return server_name, server_ip, server_port
 
 
 def looking_for_a_server():
@@ -107,6 +75,7 @@ def looking_for_a_server():
         return None
 
     magic_cookie, message_type, server_name, server_port = unpack_packet(data)
+    server_name = server_name.strip(' ')  # Strip null bytes
     if magic_cookie != 0xabcddcba:
         print("Invalid magic cookie in udp packet! nice try hacker!")
         return None
@@ -137,7 +106,7 @@ def connect_to_server(server_ip, server_port):
         # Connect the socket to the server's address and port
         tcp_socket.connect((server_ip, server_port))
     except OSError as e:
-        print(f"A {type(e)} occurred while trying to connect to the server with tcp: {e}\n")
+        print_red(f"An error occurred while trying to connect to the server with tcp \n")
 
     print(f"Successfully connected to the server at {server_ip}:{server_port} \n")
     # Immediately sends the player name after the connection is established
@@ -146,7 +115,7 @@ def connect_to_server(server_ip, server_port):
     try:
         tcp_socket.sendall(name_message.encode())
     except OSError as e:
-        print_red(f"A Connection Reset Error occurred while sending the player name: {e}\n")
+        print_red(f"A Connection Reset Error occurred while sending the player name\n")
 
     return tcp_socket
 
@@ -170,7 +139,7 @@ def print_welcome_message(server_tcp_socket):
         print_red(f"Error occurred due to server disconnection or crash while trying to receive the welcome message.")
         raise
     except Exception as e:
-        raise Exception(f"An unexpected error {type(e).__name__} occurred while trying to receive the welcome message.")
+        raise Exception(f"An unexpected error occurred while trying to receive the welcome message.")
 
 
 def print_trivia_question(server_tcp_socket):
@@ -327,9 +296,9 @@ if __name__ == "__main__":
             print_red("Client is shutting down due to a keyboard interrupt.")
             break
         except Exception as e:
-            print_red(f"Error details: {e}")
+            print_red(f"Error details: {str(e)}")
         finally:
             if server_tcp_socket:
                 server_tcp_socket.close()
                 print("Disconnected from the server.\n\n")
-            time.sleep(2)  # Wait before trying to connect again
+            time.sleep(3)  # Wait before trying to connect again
