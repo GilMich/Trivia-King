@@ -9,7 +9,7 @@ import threading
 import time
 
 
-# Last update 18:40
+# Last update 10:16
 
 # Global variables
 UDP_PORT = 13117
@@ -312,7 +312,6 @@ def get_answer_from_client(client_socket, client_address, trivia_sending_time):
             answer_value = 1 if client_answer_decoded == "true" else 0
             clients_dict[client_address]["client_answers"].append(answer_value)
         else:
-            print(f"Invalid answer received: {client_answer_decoded}")
             e = ValueError(f"Invalid answer received: {client_answer_decoded}")
             raise handle_socket_error(e, "get_answer_from_client")
 
@@ -654,7 +653,7 @@ def game_loop():
             stop_event.set()
 
         except Exception as e:
-            print(e)
+            print("Recovering from error...")
 
         finally:
             if udp_thread:
@@ -666,7 +665,7 @@ def game_loop():
             close_all_client_sockets()
             last_connection_time = float('inf')
             print("Server shutdown completed.\n\n")
-            time.sleep(2)  # Clearing and reinitializing for a new round
+            time.sleep(3)  # Clearing and reinitializing for a new round
 
 
 if __name__ == "__main__":
